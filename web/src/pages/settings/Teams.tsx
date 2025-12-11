@@ -16,7 +16,6 @@ import {
   Container,
   Database,
   Globe,
-  Cloud,
   Loader2,
   AlertCircle,
 } from 'lucide-react';
@@ -302,7 +301,7 @@ function TeamDetail({
               { icon: Container, label: 'Containers', count: 12 },
               { icon: Database, label: 'Databases', count: 3 },
               { icon: Globe, label: 'Sites', count: 8 },
-              { icon: Cloud, label: 'K8s Clusters', count: 2 },
+              // K8s Clusters management is available in VPanel Cloud (Enterprise Edition)
             ].map((resource) => (
               <div
                 key={resource.label}

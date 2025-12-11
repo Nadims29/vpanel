@@ -65,15 +65,6 @@ volumes:
 | x86_64 | [vpanel-linux-amd64.tar.gz](https://github.com/zsoft-vpanel/vpanel/releases/latest/download/vpanel-v1.0.0-linux-amd64.tar.gz) | [checksums.txt](https://github.com/zsoft-vpanel/vpanel/releases/latest/download/checksums.txt) |
 | ARM64 | [vpanel-linux-arm64.tar.gz](https://github.com/zsoft-vpanel/vpanel/releases/latest/download/vpanel-v1.0.0-linux-arm64.tar.gz) | [checksums.txt](https://github.com/zsoft-vpanel/vpanel/releases/latest/download/checksums.txt) |
 
-### Agent
-
-| 系统 | 架构 | 下载链接 |
-|------|------|----------|
-| Linux | x86_64 | [vpanel-agent-linux-amd64.tar.gz](https://github.com/zsoft-vpanel/vpanel/releases/latest/download/vpanel-agent-v1.0.0-linux-amd64.tar.gz) |
-| Linux | ARM64 | [vpanel-agent-linux-arm64.tar.gz](https://github.com/zsoft-vpanel/vpanel/releases/latest/download/vpanel-agent-v1.0.0-linux-arm64.tar.gz) |
-| macOS | Intel | [vpanel-agent-darwin-amd64.tar.gz](https://github.com/zsoft-vpanel/vpanel/releases/latest/download/vpanel-agent-v1.0.0-darwin-amd64.tar.gz) |
-| macOS | Apple Silicon | [vpanel-agent-darwin-arm64.tar.gz](https://github.com/zsoft-vpanel/vpanel/releases/latest/download/vpanel-agent-v1.0.0-darwin-arm64.tar.gz) |
-
 ### 手动安装步骤
 
 ```bash
@@ -90,16 +81,6 @@ sudo systemctl enable vpanel
 
 # 4. 访问面板
 echo "访问 http://your-server-ip:8080"
-```
-
-## Agent 安装
-
-在需要管理的远程服务器上安装 Agent：
-
-```bash
-curl -sSL https://vpanel.zsoft.cc/install-agent.sh | bash -s -- \
-  --server https://your-vpanel-server:8080 \
-  --token YOUR_AGENT_TOKEN
 ```
 
 ## 系统要求

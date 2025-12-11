@@ -43,8 +43,8 @@ type Handler struct {
 	Log       *LogHandler
 	Settings  *SettingsHandler
 	User      *UserHandler
-	Node      *NodeHandler
-	Agent     *AgentHandler
+	// Node and Agent handlers are available in VPanel Cloud (Enterprise Edition)
+	// See: https://github.com/zsoft-vpanel/vpanel-cloud
 }
 
 // New creates a new handler instance
@@ -67,8 +67,7 @@ func New(svc *services.Container, log *logger.Logger, pm *plugin.Manager) *Handl
 	h.Log = &LogHandler{svc: svc, log: log}
 	h.Settings = &SettingsHandler{svc: svc, log: log}
 	h.User = &UserHandler{svc: svc, log: log}
-	h.Node = &NodeHandler{svc: svc, log: log}
-	h.Agent = &AgentHandler{svc: svc, log: log}
+	// Node and Agent handlers are available in VPanel Cloud (Enterprise Edition)
 
 	return h
 }
@@ -2557,111 +2556,13 @@ func (h *UserHandler) GetPermissions(c *gin.Context)    { response.Success(c, ni
 func (h *UserHandler) UpdatePermissions(c *gin.Context) { response.Success(c, nil) }
 
 // ============================================
-// Node Handler
+// Node & Agent Handlers (Enterprise Feature)
 // ============================================
-
-type NodeHandler struct {
-	svc *services.Container
-	log *logger.Logger
-}
-
-func (h *NodeHandler) List(c *gin.Context) {
-	var nodes []models.Node
-	if err := h.svc.DB.Find(&nodes).Error; err != nil {
-		response.InternalError(c, "Failed to list nodes")
-		return
-	}
-	response.Success(c, nodes)
-}
-
-func (h *NodeHandler) Add(c *gin.Context) {
-	var node models.Node
-	if err := c.ShouldBindJSON(&node); err != nil {
-		response.BadRequest(c, "Invalid request data")
-		return
-	}
-
-	// Generate agent token
-	node.AgentToken = uuid.New().String()
-	node.Status = "offline"
-
-	if err := h.svc.DB.Create(&node).Error; err != nil {
-		response.InternalError(c, "Failed to add node")
-		return
-	}
-	response.Created(c, node)
-}
-
-func (h *NodeHandler) Get(c *gin.Context) {
-	id := c.Param("id")
-	var node models.Node
-	if err := h.svc.DB.First(&node, "id = ?", id).Error; err != nil {
-		response.NotFound(c, "Node not found")
-		return
-	}
-	response.Success(c, node)
-}
-
-func (h *NodeHandler) Update(c *gin.Context) {
-	id := c.Param("id")
-	var updates map[string]interface{}
-	if err := c.ShouldBindJSON(&updates); err != nil {
-		response.BadRequest(c, "Invalid request data")
-		return
-	}
-
-	// Don't allow updating agent_token
-	delete(updates, "agent_token")
-
-	if err := h.svc.DB.Model(&models.Node{}).Where("id = ?", id).Updates(updates).Error; err != nil {
-		response.InternalError(c, "Failed to update node")
-		return
-	}
-
-	var node models.Node
-	h.svc.DB.First(&node, "id = ?", id)
-	response.Success(c, node)
-}
-
-func (h *NodeHandler) Delete(c *gin.Context) {
-	id := c.Param("id")
-	if err := h.svc.DB.Delete(&models.Node{}, "id = ?", id).Error; err != nil {
-		response.InternalError(c, "Failed to delete node")
-		return
-	}
-	response.NoContent(c)
-}
-
-func (h *NodeHandler) Status(c *gin.Context) {
-	id := c.Param("id")
-	var node models.Node
-	if err := h.svc.DB.First(&node, "id = ?", id).Error; err != nil {
-		response.NotFound(c, "Node not found")
-		return
-	}
-
-	// Check if node is online (last seen within 1 minute)
-	if node.LastSeenAt != nil && time.Since(*node.LastSeenAt) < time.Minute {
-		node.Status = "online"
-	} else {
-		node.Status = "offline"
-	}
-
-	response.Success(c, gin.H{
-		"status":       node.Status,
-		"last_seen_at": node.LastSeenAt,
-	})
-}
-
-func (h *NodeHandler) ExecuteCommand(c *gin.Context) { response.Success(c, nil) }
-
-// ============================================
-// Agent Handler
-// ============================================
-
-type AgentHandler struct {
-	svc *services.Container
-	log *logger.Logger
-}
-
-func (h *AgentHandler) WebSocket(c *gin.Context) { /* WebSocket handler for agents */ }
+// Multi-node management with agents is available in VPanel Cloud (Enterprise Edition)
+// See: https://github.com/zsoft-vpanel/vpanel-cloud
+// 
+// Features available in Enterprise Edition:
+// - Multi-node cluster management
+// - Agent-based remote node control
+// - Kubernetes cluster integration
+// - Centralized monitoring across nodes

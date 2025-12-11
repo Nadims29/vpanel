@@ -25,7 +25,6 @@ import {
   Clock,
   Puzzle,
   FileText,
-  Cloud,
   Loader2,
   AlertCircle,
 } from 'lucide-react';
@@ -79,18 +78,8 @@ const permissionCategories = [
       { id: 'compose', name: 'Compose', description: 'Manage Docker Compose stacks' },
     ],
   },
-  {
-    id: 'k8s',
-    name: 'Kubernetes',
-    icon: Cloud,
-    permissions: [
-      { id: 'clusters', name: 'Clusters', description: 'Manage K8s clusters' },
-      { id: 'workloads', name: 'Workloads', description: 'Manage deployments and pods' },
-      { id: 'services', name: 'Services', description: 'Manage services and ingress' },
-      { id: 'config', name: 'Config', description: 'Manage ConfigMaps and Secrets' },
-      { id: 'storage', name: 'Storage', description: 'Manage PV and PVC' },
-    ],
-  },
+  // Kubernetes management is available in VPanel Cloud (Enterprise Edition)
+  // See: https://github.com/zsoft-vpanel/vpanel-cloud
   {
     id: 'nginx',
     name: 'Nginx',

@@ -71,7 +71,7 @@ git push origin v1.0.0
 
 ```bash
 # 下载最新 docs
-curl -L https://github.com/vstaff/vpanel/releases/latest/download/vpanel-docs.tar.gz -o docs.tar.gz
+curl -L https://github.com/zsai001/vpanel/releases/latest/download/vpanel-docs.tar.gz -o docs.tar.gz
 
 # 解压到 html 目录
 rm -rf /opt/vpanel-docs/html/*

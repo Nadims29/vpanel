@@ -120,47 +120,13 @@ type LoginAttempt struct {
 }
 
 // ===============================
-// Node & Agent Models
+// Node & Agent Models (Community Edition - Simplified)
+// Full multi-node management is available in VPanel Cloud (Enterprise Edition)
 // ===============================
 
-// Node represents a managed server node
-type Node struct {
-	BaseModel
-	Name        string    `gorm:"type:varchar(100);not null" json:"name"`
-	Hostname    string    `gorm:"type:varchar(255)" json:"hostname"`
-	IPAddress   string    `gorm:"type:varchar(45)" json:"ip_address"`
-	Port        int       `gorm:"default:8080" json:"port"`
-	AgentToken  string    `gorm:"type:varchar(255);uniqueIndex" json:"-"`
-	Status      string    `gorm:"type:varchar(20);default:'offline'" json:"status"` // online, offline, error
-	OS          string    `gorm:"type:varchar(100)" json:"os"`
-	OSVersion   string    `gorm:"type:varchar(100)" json:"os_version"`
-	Arch        string    `gorm:"type:varchar(50)" json:"arch"`
-	AgentVersion string   `gorm:"type:varchar(50)" json:"agent_version"`
-	LastSeenAt  *time.Time `json:"last_seen_at"`
-	Tags        StringArray `gorm:"type:text" json:"tags"`
-	Metadata    JSON        `gorm:"type:text" json:"metadata"`
-}
-
-// NodeMetrics stores node performance metrics
-type NodeMetrics struct {
-	ID          uint      `gorm:"primaryKey" json:"id"`
-	NodeID      string    `gorm:"type:varchar(36);index;not null" json:"node_id"`
-	CPUUsage    float64   `json:"cpu_usage"`
-	MemoryUsage float64   `json:"memory_usage"`
-	MemoryTotal uint64    `json:"memory_total"`
-	MemoryUsed  uint64    `json:"memory_used"`
-	DiskUsage   float64   `json:"disk_usage"`
-	DiskTotal   uint64    `json:"disk_total"`
-	DiskUsed    uint64    `json:"disk_used"`
-	NetworkRx   uint64    `json:"network_rx"`
-	NetworkTx   uint64    `json:"network_tx"`
-	LoadAvg1    float64   `json:"load_avg_1"`
-	LoadAvg5    float64   `json:"load_avg_5"`
-	LoadAvg15   float64   `json:"load_avg_15"`
-	Uptime      uint64    `json:"uptime"`
-	Processes   int       `json:"processes"`
-	CreatedAt   time.Time `gorm:"index" json:"created_at"`
-}
+// Note: Multi-node management with agents is available in VPanel Cloud
+// The NodeID field in other models is kept for forward compatibility
+// but is empty ("") in the community edition (single-node mode)
 
 // ===============================
 // Docker Models

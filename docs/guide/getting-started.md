@@ -55,18 +55,6 @@ http://your-server-ip:8080
 - 配置 HTTPS（推荐）
 - 开启两步验证（推荐）
 
-### 3. 添加服务器
-
-如果需要管理远程服务器，在目标服务器上安装 Agent：
-
-```bash
-curl -sSL https://vpanel.zsoft.cc/install-agent.sh | bash -s -- \
-  --server https://your-vpanel-server:8080 \
-  --token YOUR_TOKEN
-```
-
-Token 可以在 **设置 → 系统 → Agent 管理** 中生成。
-
 ## 开始使用
 
 现在你可以开始使用 VPanel 的各项功能了：
