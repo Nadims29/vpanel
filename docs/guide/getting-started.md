@@ -113,3 +113,4 @@ sudo vpanel reset-password admin
 - [详细安装指南](/guide/installation) - 了解更多安装选项
 - [Docker 管理](/guide/docker) - 开始管理容器
 - [插件开发](/guide/plugin-dev) - 开发自定义插件
+

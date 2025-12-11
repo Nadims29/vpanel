@@ -558,7 +558,7 @@ export default function CronJobs() {
         </Tabs>
         <div className="flex items-center gap-2">
           <Button
-            variant={viewMode === 'grid' ? 'default' : 'ghost'}
+            variant={viewMode === 'grid' ? 'primary' : 'ghost'}
             size="sm"
             leftIcon={<Grid3x3 className="w-4 h-4" />}
             onClick={() => setViewMode('grid')}
@@ -566,7 +566,7 @@ export default function CronJobs() {
             Grid
           </Button>
           <Button
-            variant={viewMode === 'table' ? 'default' : 'ghost'}
+            variant={viewMode === 'table' ? 'primary' : 'ghost'}
             size="sm"
             leftIcon={<List className="w-4 h-4" />}
             onClick={() => setViewMode('table')}
@@ -776,15 +776,57 @@ export default function CronJobs() {
             <label className="block text-sm font-medium text-dark-300 mb-1.5">
               Cron Schedule <span className="text-red-400">*</span>
             </label>
-            <Input
-              type="text"
-              placeholder="0 * * * *"
-              value={formData.schedule}
-              onChange={(e) => setFormData({ ...formData, schedule: e.target.value })}
-            />
-            <p className="text-xs text-dark-500 mt-1">
-              Format: minute hour day month weekday (e.g., "0 * * * *" for every hour)
-            </p>
+            <div className="space-y-2">
+              {/* Preset buttons */}
+              <div className="flex flex-wrap gap-2">
+                {[
+                  { label: 'Every Minute', value: '* * * * *', desc: '每分钟' },
+                  { label: 'Every 5 Min', value: '*/5 * * * *', desc: '每5分钟' },
+                  { label: 'Every 15 Min', value: '*/15 * * * *', desc: '每15分钟' },
+                  { label: 'Every 30 Min', value: '*/30 * * * *', desc: '每30分钟' },
+                  { label: 'Hourly', value: '0 * * * *', desc: '每小时' },
+                  { label: 'Daily', value: '0 0 * * *', desc: '每天午夜' },
+                  { label: 'Weekly', value: '0 0 * * 0', desc: '每周日' },
+                  { label: 'Monthly', value: '0 0 1 * *', desc: '每月1日' },
+                ].map((preset) => (
+                  <button
+                    key={preset.value}
+                    type="button"
+                    onClick={() => setFormData({ ...formData, schedule: preset.value })}
+                    className={cn(
+                      'px-2.5 py-1 text-xs rounded-lg border transition-all',
+                      formData.schedule === preset.value
+                        ? 'bg-primary-500/20 border-primary-500 text-primary-400'
+                        : 'bg-dark-800 border-dark-600 text-dark-300 hover:border-dark-500 hover:text-dark-200'
+                    )}
+                    title={preset.desc}
+                  >
+                    {preset.label}
+                  </button>
+                ))}
+              </div>
+              {/* Custom input */}
+              <div className="flex gap-2">
+                <Input
+                  type="text"
+                  placeholder="* * * * * 或 0 */2 * * *"
+                  value={formData.schedule}
+                  onChange={(e) => setFormData({ ...formData, schedule: e.target.value })}
+                  className="flex-1 font-mono"
+                />
+              </div>
+              <div className="flex items-start gap-2 text-xs text-dark-500">
+                <span className="flex-shrink-0">格式:</span>
+                <div className="font-mono bg-dark-900/50 rounded px-2 py-1 flex-1">
+                  <span className="text-blue-400">分</span>{' '}
+                  <span className="text-green-400">时</span>{' '}
+                  <span className="text-yellow-400">日</span>{' '}
+                  <span className="text-orange-400">月</span>{' '}
+                  <span className="text-purple-400">周</span>
+                  <span className="text-dark-500 ml-2">(支持6位秒级: 秒 分 时 日 月 周)</span>
+                </div>
+              </div>
+            </div>
           </div>
           <div>
             <label className="block text-sm font-medium text-dark-300 mb-1.5">

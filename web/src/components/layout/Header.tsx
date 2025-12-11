@@ -35,11 +35,12 @@ export default function Header() {
 
   return (
     <header className={cn(
-      "h-16 backdrop-blur-md px-6 flex items-center justify-between sticky top-0 z-20",
+      "h-16 backdrop-blur-md px-4 sm:px-6 flex items-center justify-between sticky top-0 z-20",
       isLight 
         ? "bg-white/95 border-b border-gray-200" 
         : "bg-gray-900/80 border-b border-gray-800"
     )}>
+      <div className="max-w-[1600px] w-full mx-auto flex items-center justify-between gap-4">
       {/* Search - Dify Style */}
       <div className="flex-1 max-w-xl">
         <div className="relative">
@@ -129,12 +130,12 @@ export default function Header() {
           >
             <div className="relative w-8 h-8 rounded-full dify-gradient flex items-center justify-center shadow-md shadow-blue-500/20">
               <span className="text-white font-medium text-sm">
-                {user?.displayName?.[0] || user?.username?.[0] || 'U'}
+                {user?.display_name?.[0] || user?.username?.[0] || 'U'}
               </span>
             </div>
             <div className="hidden sm:block text-left">
               <p className={cn("text-sm font-medium", isLight ? "text-gray-900" : "text-gray-100")}>
-                {user?.displayName || user?.username}
+                {user?.display_name || user?.username}
               </p>
               <p className="text-xs text-gray-500">{user?.role}</p>
             </div>
@@ -199,6 +200,7 @@ export default function Header() {
             )}
           </AnimatePresence>
         </div>
+      </div>
       </div>
     </header>
   );

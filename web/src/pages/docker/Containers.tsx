@@ -498,7 +498,7 @@ export default function DockerContainers() {
         </Tabs>
         <div className="flex items-center gap-2">
           <Button
-            variant={viewMode === 'grid' ? 'default' : 'ghost'}
+            variant={viewMode === 'grid' ? 'primary' : 'ghost'}
             size="sm"
             leftIcon={<Grid3x3 className="w-4 h-4" />}
             onClick={() => setViewMode('grid')}
@@ -506,7 +506,7 @@ export default function DockerContainers() {
             Grid
           </Button>
           <Button
-            variant={viewMode === 'table' ? 'default' : 'ghost'}
+            variant={viewMode === 'table' ? 'primary' : 'ghost'}
             size="sm"
             leftIcon={<List className="w-4 h-4" />}
             onClick={() => setViewMode('table')}
@@ -854,7 +854,7 @@ export default function DockerContainers() {
                 <label className="text-sm font-medium text-dark-400 mb-2 block">Ports</label>
                 <div className="flex flex-wrap gap-2">
                   {selectedContainer.ports.map((port, i) => (
-                    <Badge key={i} variant="secondary">{port}</Badge>
+                    <Badge key={i} variant="gray">{port}</Badge>
                   ))}
                 </div>
               </div>

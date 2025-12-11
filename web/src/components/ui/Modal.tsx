@@ -1,4 +1,5 @@
 import { Fragment, ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, AlertTriangle, CheckCircle, Info } from 'lucide-react';
 import { cn } from '@/utils/cn';
@@ -33,7 +34,11 @@ export function Modal({
     full: 'max-w-[90vw] max-h-[90vh]',
   };
 
-  return (
+  if (typeof window === 'undefined') {
+    return null;
+  }
+
+  return createPortal(
     <AnimatePresence>
       {open && (
         <Fragment>
@@ -43,21 +48,22 @@ export function Modal({
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             onClick={closeOnBackdrop ? onClose : undefined}
-            className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50"
+            className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[99]"
           />
 
-          {/* Modal */}
-          <motion.div
-            initial={{ opacity: 0, scale: 0.95, y: 10 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.95, y: 10 }}
-            transition={{ duration: 0.2 }}
-            className={cn(
-              'fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-50',
-              'w-full bg-dark-800 border border-dark-700 rounded-xl shadow-2xl',
-              sizes[size]
-            )}
-          >
+          {/* Modal Container - uses flex for centering */}
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 pointer-events-none">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              transition={{ duration: 0.2 }}
+              className={cn(
+                'w-full bg-dark-800 border border-dark-700 rounded-xl shadow-2xl',
+                'max-h-[90vh] overflow-y-auto pointer-events-auto',
+                sizes[size]
+              )}
+            >
             {/* Header */}
             {(title || showClose) && (
               <div className="flex items-center justify-between p-4 border-b border-dark-700">
@@ -78,10 +84,12 @@ export function Modal({
 
             {/* Content */}
             <div className="p-4">{children}</div>
-          </motion.div>
+            </motion.div>
+          </div>
         </Fragment>
       )}
-    </AnimatePresence>
+    </AnimatePresence>,
+    document.body
   );
 }
 

@@ -1,196 +1,277 @@
-import { useState, useRef, useEffect, KeyboardEvent } from 'react';
-import { motion } from 'framer-motion';
-import { Plus, X, Maximize2, Minimize2, Settings, Trash2, Server, ChevronDown } from 'lucide-react';
-import { Button, Card, Dropdown, DropdownItem, DropdownDivider } from '@/components/ui';
+import { useState, useRef, useEffect, useCallback } from 'react';
+import { Plus, X, Maximize2, Minimize2, Settings } from 'lucide-react';
+import { Button, Card } from '@/components/ui';
 import { cn } from '@/utils/cn';
-
-interface TerminalLine {
-  type: 'input' | 'output' | 'error' | 'info';
-  content: string;
-  timestamp?: Date;
-}
+import { Terminal as XTerm } from '@xterm/xterm';
+import { FitAddon } from '@xterm/addon-fit';
+import { WebLinksAddon } from '@xterm/addon-web-links';
+import { WebglAddon } from '@xterm/addon-webgl';
+import '@xterm/xterm/css/xterm.css';
+import { useAuthStore } from '@/stores/auth';
 
 interface TerminalTab {
   id: string;
   title: string;
-  history: TerminalLine[];
-  cwd: string;
 }
 
-// Simulated command responses
-const executeCommand = (cmd: string, cwd: string): { output: string; type: 'output' | 'error' } => {
-  const [command, ...args] = cmd.trim().split(' ');
-  
-  switch (command) {
-    case 'ls':
-      return {
-        output: `config/  logs/  www/  backup/
-nginx.conf  docker-compose.yml  app.log
-database.sql  backup.tar.gz`,
-        type: 'output',
-      };
-    case 'pwd':
-      return { output: cwd, type: 'output' };
-    case 'whoami':
-      return { output: 'root', type: 'output' };
-    case 'date':
-      return { output: new Date().toString(), type: 'output' };
-    case 'uptime':
-      return { output: ' 14:32:21 up 45 days,  3:42,  2 users,  load average: 0.52, 0.58, 0.59', type: 'output' };
-    case 'df':
-      return {
-        output: `Filesystem      Size  Used Avail Use% Mounted on
-/dev/sda1       500G  234G  266G  47% /
-tmpfs            16G     0   16G   0% /dev/shm`,
-        type: 'output',
-      };
-    case 'free':
-      return {
-        output: `              total        used        free      shared  buff/cache   available
-Mem:       32768000    12582912    10485760      524288     9699328    19660800
-Swap:       8388608           0     8388608`,
-        type: 'output',
-      };
-    case 'top':
-      return {
-        output: `top - 14:32:21 up 45 days,  3:42,  2 users,  load average: 0.52, 0.58, 0.59
-Tasks: 156 total,   1 running, 155 sleeping,   0 stopped,   0 zombie
-%Cpu(s):  2.3 us,  0.8 sy,  0.0 ni, 96.5 id,  0.3 wa,  0.0 hi,  0.1 si
-MiB Mem :  32768.0 total,  10240.0 free,  12288.0 used,  10240.0 buff/cache
-MiB Swap:   8192.0 total,   8192.0 free,      0.0 used.  19200.0 avail Mem`,
-        type: 'output',
-      };
-    case 'help':
-      return {
-        output: `Available commands: ls, pwd, whoami, date, uptime, df, free, top, clear, help`,
-        type: 'output',
-      };
-    case 'clear':
-      return { output: '__CLEAR__', type: 'output' };
-    case '':
-      return { output: '', type: 'output' };
-    default:
-      return { output: `bash: ${command}: command not found`, type: 'error' };
-  }
-};
+function TerminalPane({ tabId, isActive }: { tabId: string; isActive: boolean }) {
+  const terminalRef = useRef<HTMLDivElement>(null);
+  const xtermRef = useRef<XTerm | null>(null);
+  const wsRef = useRef<WebSocket | null>(null);
+  const fitAddonRef = useRef<FitAddon | null>(null);
+  const [connected, setConnected] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-function TerminalComponent({ tab, onUpdate }: { tab: TerminalTab; onUpdate: (history: TerminalLine[]) => void }) {
-  const [input, setInput] = useState('');
-  const [commandHistory, setCommandHistory] = useState<string[]>([]);
-  const [historyIndex, setHistoryIndex] = useState(-1);
-  const inputRef = useRef<HTMLInputElement>(null);
-  const containerRef = useRef<HTMLDivElement>(null);
-
+  // Initialize terminal
   useEffect(() => {
-    if (containerRef.current) {
-      containerRef.current.scrollTop = containerRef.current.scrollHeight;
-    }
-  }, [tab.history]);
+    if (!terminalRef.current || xtermRef.current) return;
 
-  const handleCommand = () => {
-    if (!input.trim()) return;
+    // Create xterm instance with Retina optimization
+    // Font size 12px is common for terminals, aligned to 4px grid
+    const xterm = new XTerm({
+      cursorBlink: true,
+      cursorStyle: 'block',
+      fontSize: 12,
+      fontFamily: 'Menlo, Monaco, "Courier New", monospace',
+      fontWeight: '400',
+      fontWeightBold: '600',
+      letterSpacing: 0,
+      lineHeight: 1.0,
+      theme: {
+        background: '#0a0a0a',
+        foreground: '#e5e5e5',
+        cursor: '#22c55e',
+        cursorAccent: '#0a0a0a',
+        selectionBackground: '#3b82f680',
+        black: '#171717',
+        red: '#ef4444',
+        green: '#22c55e',
+        yellow: '#eab308',
+        blue: '#3b82f6',
+        magenta: '#a855f7',
+        cyan: '#06b6d4',
+        white: '#e5e5e5',
+        brightBlack: '#525252',
+        brightRed: '#f87171',
+        brightGreen: '#4ade80',
+        brightYellow: '#facc15',
+        brightBlue: '#60a5fa',
+        brightMagenta: '#c084fc',
+        brightCyan: '#22d3ee',
+        brightWhite: '#ffffff',
+      },
+      allowTransparency: false, // Disable for better rendering performance
+      scrollback: 10000,
+      // Retina optimization options
+      allowProposedApi: true,
+      windowOptions: {
+        fullscreenWin: false,
+        maximizeWin: false,
+        minimizeWin: false,
+        raiseWin: false,
+        refreshWin: false,
+        restoreWin: false,
+        setWinLines: false,
+        setWinPosition: false,
+        setWinSizeChars: false,
+        setWinSizePixels: false,
+        setWinTitle: false,
+      },
+    });
 
-    const newHistory: TerminalLine[] = [
-      ...tab.history,
-      { type: 'input', content: input, timestamp: new Date() },
-    ];
+    // Add addons
+    const fitAddon = new FitAddon();
+    const webLinksAddon = new WebLinksAddon();
+    xterm.loadAddon(fitAddon);
+    xterm.loadAddon(webLinksAddon);
 
-    const result = executeCommand(input, tab.cwd);
+    // Open terminal in container
+    xterm.open(terminalRef.current);
     
-    if (result.output === '__CLEAR__') {
-      onUpdate([]);
-    } else if (result.output) {
-      newHistory.push({ type: result.type, content: result.output, timestamp: new Date() });
-      onUpdate(newHistory);
-    } else {
-      onUpdate(newHistory);
+    // Try to load WebGL addon for better Retina rendering
+    try {
+      const webglAddon = new WebglAddon();
+      webglAddon.onContextLoss(() => {
+        webglAddon.dispose();
+      });
+      xterm.loadAddon(webglAddon);
+      console.log('WebGL renderer enabled for better Retina display');
+    } catch (e) {
+      console.warn('WebGL not available, using canvas renderer');
+    }
+    
+    fitAddon.fit();
+
+    xtermRef.current = xterm;
+    fitAddonRef.current = fitAddon;
+
+    // Connect WebSocket
+    connectWebSocket(xterm, fitAddon);
+
+    return () => {
+      if (wsRef.current) {
+        wsRef.current.close();
+        wsRef.current = null;
+      }
+      xterm.dispose();
+      xtermRef.current = null;
+      fitAddonRef.current = null;
+    };
+  }, [tabId]);
+
+  // Connect to WebSocket
+  const connectWebSocket = useCallback((xterm: XTerm, fitAddon: FitAddon) => {
+    const token = useAuthStore.getState().token;
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const host = window.location.host;
+    
+    const cols = xterm.cols;
+    const rows = xterm.rows;
+    
+    const params = new URLSearchParams();
+    params.set('cols', String(cols));
+    params.set('rows', String(rows));
+    if (token) {
+      params.set('token', token);
+    }
+    
+    const url = `${protocol}//${host}/api/terminal/ws?${params.toString()}`;
+    console.log('Connecting to terminal WebSocket:', url);
+    
+    const ws = new WebSocket(url);
+    wsRef.current = ws;
+
+    ws.onopen = () => {
+      console.log('Terminal WebSocket connected');
+      setConnected(true);
+      setError(null);
+      
+      // Focus terminal
+      xterm.focus();
+    };
+
+    ws.onmessage = (event) => {
+      if (event.data instanceof Blob) {
+        event.data.text().then((text) => {
+          xterm.write(text);
+        });
+      } else if (typeof event.data === 'string') {
+        xterm.write(event.data);
+      } else if (event.data instanceof ArrayBuffer) {
+        const decoder = new TextDecoder();
+        xterm.write(decoder.decode(event.data));
+      }
+    };
+
+    ws.onerror = (event) => {
+      console.error('Terminal WebSocket error:', event);
+      setError('WebSocket connection error');
+      setConnected(false);
+    };
+
+    ws.onclose = (event) => {
+      console.log('Terminal WebSocket closed:', event.code, event.reason);
+      setConnected(false);
+      if (event.code !== 1000) {
+        setError(`Connection closed: ${event.reason || 'Unknown error'}`);
+      }
+    };
+
+    // Send terminal input to WebSocket
+    xterm.onData((data) => {
+      if (ws.readyState === WebSocket.OPEN) {
+        ws.send(data);
+      }
+    });
+
+    // Handle terminal resize
+    xterm.onResize(({ cols, rows }) => {
+      if (ws.readyState === WebSocket.OPEN) {
+        // Send resize message: \x01<cols>;<rows>
+        ws.send(`\x01${cols};${rows}`);
+      }
+    });
+  }, []);
+
+  // Handle window resize
+  useEffect(() => {
+    const handleResize = () => {
+      if (fitAddonRef.current && xtermRef.current) {
+        try {
+          fitAddonRef.current.fit();
+        } catch (e) {
+          // Ignore resize errors
+        }
+      }
+    };
+
+    const resizeObserver = new ResizeObserver(handleResize);
+    if (terminalRef.current) {
+      resizeObserver.observe(terminalRef.current);
     }
 
-    setCommandHistory([...commandHistory, input]);
-    setHistoryIndex(-1);
-    setInput('');
-  };
+    window.addEventListener('resize', handleResize);
 
-  const handleKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter') {
-      handleCommand();
-    } else if (e.key === 'ArrowUp') {
-      e.preventDefault();
-      if (historyIndex < commandHistory.length - 1) {
-        const newIndex = historyIndex + 1;
-        setHistoryIndex(newIndex);
-        setInput(commandHistory[commandHistory.length - 1 - newIndex]);
+    return () => {
+      resizeObserver.disconnect();
+      window.removeEventListener('resize', handleResize);
+    };
+  }, []);
+
+  // Focus terminal when tab becomes active
+  useEffect(() => {
+    if (isActive && xtermRef.current) {
+      xtermRef.current.focus();
+      if (fitAddonRef.current) {
+        try {
+          fitAddonRef.current.fit();
+        } catch (e) {
+          // Ignore
+        }
       }
-    } else if (e.key === 'ArrowDown') {
-      e.preventDefault();
-      if (historyIndex > 0) {
-        const newIndex = historyIndex - 1;
-        setHistoryIndex(newIndex);
-        setInput(commandHistory[commandHistory.length - 1 - newIndex]);
-      } else if (historyIndex === 0) {
-        setHistoryIndex(-1);
-        setInput('');
-      }
-    } else if (e.key === 'Tab') {
-      e.preventDefault();
-      // Tab completion could be implemented here
-    } else if (e.key === 'l' && e.ctrlKey) {
-      e.preventDefault();
-      onUpdate([]);
     }
-  };
+  }, [isActive]);
 
   return (
-    <div
-      ref={containerRef}
-      className="h-full bg-dark-950 font-mono text-sm p-4 overflow-auto cursor-text"
-      onClick={() => inputRef.current?.focus()}
-    >
-      {/* Welcome message */}
-      {tab.history.length === 0 && (
-        <div className="text-dark-500 mb-4">
-          <p>Welcome to VPanel Terminal</p>
-          <p>Type 'help' for available commands</p>
+    <div className="h-full flex flex-col bg-[#0a0a0a]">
+      {/* Connection status bar */}
+      {(!connected || error) && (
+        <div className={cn(
+          "px-3 py-1 text-xs",
+          error ? "bg-red-500/20 text-red-400" : "bg-yellow-500/20 text-yellow-400"
+        )}>
+          {error || 'Connecting to terminal...'}
         </div>
       )}
-
-      {/* History */}
-      {tab.history.map((line, i) => (
-        <div key={i} className="mb-1">
-          {line.type === 'input' ? (
-            <div className="flex items-center gap-2">
-              <span className="text-green-400">root@vpanel</span>
-              <span className="text-dark-500">:</span>
-              <span className="text-blue-400">{tab.cwd}</span>
-              <span className="text-dark-500">$</span>
-              <span className="text-dark-100 ml-1">{line.content}</span>
-            </div>
-          ) : line.type === 'error' ? (
-            <pre className="text-red-400 whitespace-pre-wrap">{line.content}</pre>
-          ) : (
-            <pre className="text-dark-300 whitespace-pre-wrap">{line.content}</pre>
-          )}
-        </div>
-      ))}
-
-      {/* Input line */}
-      <div className="flex items-center gap-2">
-        <span className="text-green-400">root@vpanel</span>
-        <span className="text-dark-500">:</span>
-        <span className="text-blue-400">{tab.cwd}</span>
-        <span className="text-dark-500">$</span>
-        <input
-          ref={inputRef}
-          type="text"
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={handleKeyDown}
-          className="flex-1 bg-transparent border-none outline-none text-dark-100 ml-1"
-          autoFocus
-          spellCheck={false}
-          autoComplete="off"
-        />
-      </div>
+      
+      {/* Terminal container with pixel-perfect alignment */}
+      <div 
+        ref={terminalRef} 
+        className="flex-1 w-full terminal-container"
+        style={{ 
+          padding: '4px',
+          WebkitFontSmoothing: 'antialiased',
+          MozOsxFontSmoothing: 'grayscale',
+        }}
+      />
+      
+      {/* Style for xterm canvas optimization */}
+      <style>{`
+        .terminal-container .xterm {
+          padding: 0;
+        }
+        .terminal-container .xterm-viewport {
+          overflow-y: auto !important;
+        }
+        .terminal-container .xterm-screen {
+          image-rendering: -webkit-optimize-contrast;
+          image-rendering: crisp-edges;
+        }
+        .terminal-container canvas {
+          image-rendering: -webkit-optimize-contrast;
+          image-rendering: crisp-edges;
+        }
+      `}</style>
     </div>
   );
 }
@@ -200,8 +281,6 @@ export default function Terminal() {
     {
       id: '1',
       title: 'Terminal 1',
-      history: [],
-      cwd: '/var/www',
     }
   ]);
   const [activeTab, setActiveTab] = useState('1');
@@ -212,8 +291,6 @@ export default function Terminal() {
     const newTab: TerminalTab = {
       id: newId,
       title: `Terminal ${tabs.length + 1}`,
-      history: [],
-      cwd: '/var/www',
     };
     setTabs([...tabs, newTab]);
     setActiveTab(newId);
@@ -221,18 +298,13 @@ export default function Terminal() {
 
   const closeTab = (id: string) => {
     if (tabs.length === 1) return;
+    
     const newTabs = tabs.filter((t) => t.id !== id);
     setTabs(newTabs);
     if (activeTab === id) {
       setActiveTab(newTabs[0].id);
     }
   };
-
-  const updateTabHistory = (id: string, history: TerminalLine[]) => {
-    setTabs(tabs.map((t) => (t.id === id ? { ...t, history } : t)));
-  };
-
-  const currentTab = tabs.find((t) => t.id === activeTab);
 
   return (
     <div className={cn('flex flex-col', isFullscreen ? 'fixed inset-0 z-50 bg-dark-950' : 'h-[calc(100vh-8rem)]')}>
@@ -241,7 +313,7 @@ export default function Terminal() {
         <div className="flex items-center justify-between mb-4">
           <div>
             <h1 className="text-2xl font-semibold text-dark-100">Terminal</h1>
-            <p className="text-dark-400">Web-based SSH terminal</p>
+            <p className="text-dark-400">Web-based terminal</p>
           </div>
           <div className="flex items-center gap-2">
             <Button variant="secondary" size="sm" leftIcon={<Settings className="w-4 h-4" />}>
@@ -299,13 +371,6 @@ export default function Terminal() {
           
           <div className="flex items-center gap-1 px-2">
             <button
-              onClick={() => updateTabHistory(activeTab, [])}
-              className="p-1.5 text-dark-400 hover:text-dark-100 hover:bg-dark-700 rounded transition-colors"
-              title="Clear terminal"
-            >
-              <Trash2 className="w-4 h-4" />
-            </button>
-            <button
               onClick={() => setIsFullscreen(!isFullscreen)}
               className="p-1.5 text-dark-400 hover:text-dark-100 hover:bg-dark-700 rounded transition-colors"
               title={isFullscreen ? 'Exit fullscreen' : 'Fullscreen'}
@@ -317,13 +382,14 @@ export default function Terminal() {
 
         {/* Terminal content */}
         <div className="flex-1 overflow-hidden">
-          {currentTab && (
-            <TerminalComponent
-              key={currentTab.id}
-              tab={currentTab}
-              onUpdate={(history) => updateTabHistory(currentTab.id, history)}
-            />
-          )}
+          {tabs.map((tab) => (
+            <div
+              key={tab.id}
+              className={cn('h-full', tab.id === activeTab ? 'block' : 'hidden')}
+            >
+              <TerminalPane tabId={tab.id} isActive={tab.id === activeTab} />
+            </div>
+          ))}
         </div>
       </Card>
     </div>

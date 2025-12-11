@@ -267,3 +267,4 @@ sudo rm -rf /opt/vpanel
 ::: warning 注意
 卸载不会删除数据目录，如需完全删除请手动删除 `/opt/vpanel/data`
 :::
+

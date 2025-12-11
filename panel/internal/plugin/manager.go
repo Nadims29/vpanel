@@ -39,32 +39,32 @@ type LoadedPlugin struct {
 
 // Manifest describes a plugin
 type Manifest struct {
-	ID           string            `json:"id"`
-	Name         string            `json:"name"`
-	Version      string            `json:"version"`
-	Description  string            `json:"description"`
-	Author       string            `json:"author"`
-	Homepage     string            `json:"homepage"`
-	License      string            `json:"license"`
-	Icon         string            `json:"icon"`
-	Category     string            `json:"category"`
-	Tags         []string          `json:"tags"`
-	Dependencies []string          `json:"dependencies"`
-	Permissions  []string          `json:"permissions"`
-	MinVersion   string            `json:"min_version"`
-	Settings     []SettingDef      `json:"settings"`
-	Routes       []RouteDef        `json:"routes"`
-	Menus        []MenuDef         `json:"menus"`
+	ID           string       `json:"id"`
+	Name         string       `json:"name"`
+	Version      string       `json:"version"`
+	Description  string       `json:"description"`
+	Author       string       `json:"author"`
+	Homepage     string       `json:"homepage"`
+	License      string       `json:"license"`
+	Icon         string       `json:"icon"`
+	Category     string       `json:"category"`
+	Tags         []string     `json:"tags"`
+	Dependencies []string     `json:"dependencies"`
+	Permissions  []string     `json:"permissions"`
+	MinVersion   string       `json:"min_version"`
+	Settings     []SettingDef `json:"settings"`
+	Routes       []RouteDef   `json:"routes"`
+	Menus        []MenuDef    `json:"menus"`
 }
 
 // SettingDef defines a plugin setting
 type SettingDef struct {
-	Key         string      `json:"key"`
-	Type        string      `json:"type"` // string, int, bool, select, textarea
-	Label       string      `json:"label"`
-	Description string      `json:"description"`
-	Default     interface{} `json:"default"`
-	Required    bool        `json:"required"`
+	Key         string         `json:"key"`
+	Type        string         `json:"type"` // string, int, bool, select, textarea
+	Label       string         `json:"label"`
+	Description string         `json:"description"`
+	Default     interface{}    `json:"default"`
+	Required    bool           `json:"required"`
 	Options     []SelectOption `json:"options,omitempty"`
 }
 
@@ -128,22 +128,22 @@ type PluginContext struct {
 // PluginAPI provides API access to plugins
 type PluginAPI struct {
 	// Database operations
-	GetSetting   func(key string) (string, error)
-	SetSetting   func(key, value string) error
-	
+	GetSetting func(key string) (string, error)
+	SetSetting func(key, value string) error
+
 	// File operations
-	ReadFile     func(path string) ([]byte, error)
-	WriteFile    func(path string, data []byte) error
-	
+	ReadFile  func(path string) ([]byte, error)
+	WriteFile func(path string, data []byte) error
+
 	// HTTP client
-	HTTPGet      func(url string) ([]byte, error)
-	HTTPPost     func(url string, body []byte) ([]byte, error)
-	
+	HTTPGet  func(url string) ([]byte, error)
+	HTTPPost func(url string, body []byte) ([]byte, error)
+
 	// Notifications
 	SendNotification func(title, message string) error
-	
+
 	// Execute commands
-	Execute      func(command string, args ...string) (string, error)
+	Execute func(command string, args ...string) (string, error)
 }
 
 // Info contains plugin information
@@ -396,6 +396,78 @@ func (m *Manager) List() []*LoadedPlugin {
 	return result
 }
 
+// AvailablePlugin represents an available plugin in the market
+type AvailablePlugin struct {
+	Manifest  *Manifest `json:"manifest"`
+	Path      string    `json:"path"`
+	Installed bool      `json:"installed"`
+	Enabled   bool      `json:"enabled,omitempty"`
+	Version   string    `json:"version,omitempty"`
+}
+
+// ScanAvailable scans the plugin directory for available plugins
+func (m *Manager) ScanAvailable() ([]*AvailablePlugin, error) {
+	entries, err := os.ReadDir(m.config.PluginDir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return []*AvailablePlugin{}, nil
+		}
+		return nil, err
+	}
+
+	m.mu.RLock()
+	loadedPlugins := make(map[string]*LoadedPlugin)
+	for id, lp := range m.plugins {
+		loadedPlugins[id] = lp
+	}
+	m.mu.RUnlock()
+
+	var available []*AvailablePlugin
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+
+		pluginPath := filepath.Join(m.config.PluginDir, entry.Name())
+		manifestPath := filepath.Join(pluginPath, "manifest.json")
+
+		// Check if manifest exists
+		if _, err := os.Stat(manifestPath); os.IsNotExist(err) {
+			continue
+		}
+
+		// Read manifest
+		manifestData, err := os.ReadFile(manifestPath)
+		if err != nil {
+			m.log.Debug("Failed to read manifest", "path", manifestPath, "error", err)
+			continue
+		}
+
+		var manifest Manifest
+		if err := json.Unmarshal(manifestData, &manifest); err != nil {
+			m.log.Debug("Failed to parse manifest", "path", manifestPath, "error", err)
+			continue
+		}
+
+		// Check if plugin is installed
+		lp, installed := loadedPlugins[manifest.ID]
+		ap := &AvailablePlugin{
+			Manifest:  &manifest,
+			Path:      pluginPath,
+			Installed: installed,
+		}
+
+		if installed {
+			ap.Enabled = lp.Enabled
+			ap.Version = lp.Manifest.Version
+		}
+
+		available = append(available, ap)
+	}
+
+	return available, nil
+}
+
 // RegisterRoutes registers plugin routes to the router
 func (m *Manager) RegisterRoutes(rg *gin.RouterGroup) {
 	m.mu.RLock()
@@ -476,4 +548,3 @@ func (m *Manager) createPluginAPI(pluginID string) *PluginAPI {
 		},
 	}
 }
-

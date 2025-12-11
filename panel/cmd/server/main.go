@@ -72,6 +72,11 @@ func main() {
 		log.Fatal("Failed to migrate database", "error", err)
 	}
 
+	// Seed database with default data (including default admin user)
+	if err := database.Seed(db); err != nil {
+		log.Fatal("Failed to seed database", "error", err)
+	}
+
 	// Initialize services
 	svc := services.NewContainer(db, cfg, log)
 
@@ -100,7 +105,7 @@ func main() {
 	router.Use(middleware.RateLimit(cfg.Server.RateLimit))
 
 	// Initialize handlers
-	h := handlers.New(svc, log)
+	h := handlers.New(svc, log, pluginManager)
 
 	// Setup routes
 	setupRoutes(router, h, svc, pluginManager)
@@ -169,6 +174,7 @@ func setupRoutes(r *gin.Engine, h *handlers.Handler, svc *services.Container, pm
 	// Protected routes
 	api := r.Group("/api")
 	api.Use(middleware.Auth(svc.Auth))
+	api.Use(middleware.Audit(svc.Audit))
 	{
 		// User profile
 		api.GET("/profile", h.Auth.Profile)
@@ -264,6 +270,8 @@ func setupRoutes(r *gin.Engine, h *handlers.Handler, svc *services.Container, pm
 			database.POST("/servers/:id/backup", h.Database.Backup)
 			database.POST("/servers/:id/restore", h.Database.Restore)
 			database.GET("/backups", h.Database.ListBackups)
+			database.GET("/backups/:id", h.Database.GetBackup)
+			database.DELETE("/backups/:id", h.Database.DeleteBackup)
 		}
 
 		// File Management
@@ -347,6 +355,9 @@ func setupRoutes(r *gin.Engine, h *handlers.Handler, svc *services.Container, pm
 		{
 			logs.GET("/system", h.Log.SystemLogs)
 			logs.GET("/audit", h.Log.AuditLogs)
+			logs.GET("/audit/stats", h.Log.AuditStats)
+			logs.GET("/audit/actions", h.Log.AuditActions)
+			logs.GET("/audit/resources", h.Log.AuditResources)
 			logs.GET("/tasks", h.Log.TaskLogs)
 		}
 
@@ -374,17 +385,17 @@ func setupRoutes(r *gin.Engine, h *handlers.Handler, svc *services.Container, pm
 			users.PUT("/:id/permissions", h.User.UpdatePermissions)
 		}
 
-		// Nodes (Multi-server management)
-		nodes := api.Group("/nodes")
-		{
-			nodes.GET("/", h.Node.List)
-			nodes.POST("/", h.Node.Add)
-			nodes.GET("/:id", h.Node.Get)
-			nodes.PUT("/:id", h.Node.Update)
-			nodes.DELETE("/:id", h.Node.Delete)
-			nodes.GET("/:id/status", h.Node.Status)
-			nodes.POST("/:id/command", h.Node.ExecuteCommand)
-		}
+		// Nodes (Multi-server management) - Disabled, single node only
+		// nodes := api.Group("/nodes")
+		// {
+		// 	nodes.GET("/", h.Node.List)
+		// 	nodes.POST("/", h.Node.Add)
+		// 	nodes.GET("/:id", h.Node.Get)
+		// 	nodes.PUT("/:id", h.Node.Update)
+		// 	nodes.DELETE("/:id", h.Node.Delete)
+		// 	nodes.GET("/:id/status", h.Node.Status)
+		// 	nodes.POST("/:id/command", h.Node.ExecuteCommand)
+		// }
 	}
 
 	// Plugin API routes (dynamically registered)

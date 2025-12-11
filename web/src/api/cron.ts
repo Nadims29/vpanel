@@ -4,33 +4,21 @@ export interface CronJob {
   id: string;
   node_id: string;
   name: string;
-  schedule: string; // cron expression
+  schedule: string;
   command: string;
   user: string;
   enabled: boolean;
-  timeout: number; // seconds
+  timeout: number;
   last_run_at?: string;
   next_run_at?: string;
-  last_status?: 'success' | 'failed' | 'timeout';
+  last_status?: string;
   description?: string;
-  created_at?: string;
-  updated_at?: string;
-}
-
-export interface CronJobLog {
-  id: number;
-  job_id: string;
-  started_at: string;
-  ended_at?: string;
-  duration: number; // milliseconds
-  status: 'success' | 'failed' | 'timeout';
-  output?: string;
-  error?: string;
-  exit_code: number;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface CreateCronJobRequest {
-  node_id: string;
+  node_id?: string;
   name: string;
   schedule: string;
   command: string;
@@ -40,14 +28,16 @@ export interface CreateCronJobRequest {
   description?: string;
 }
 
-export interface UpdateCronJobRequest {
-  name?: string;
-  schedule?: string;
-  command?: string;
-  user?: string;
-  enabled?: boolean;
-  timeout?: number;
-  description?: string;
+export interface CronJobLog {
+  id: number;
+  job_id: string;
+  started_at: string;
+  ended_at?: string;
+  duration: number;
+  status: string;
+  output: string;
+  error: string;
+  exit_code: number;
 }
 
 // List all cron jobs
@@ -56,7 +46,7 @@ export async function listJobs(nodeId?: string): Promise<CronJob[]> {
   return get<CronJob[]>('/cron/jobs', params);
 }
 
-// Get cron job details
+// Get a cron job
 export async function getJob(id: string): Promise<CronJob> {
   return get<CronJob>(`/cron/jobs/${id}`);
 }
@@ -66,26 +56,23 @@ export async function createJob(data: CreateCronJobRequest): Promise<CronJob> {
   return post<CronJob>('/cron/jobs', data);
 }
 
-// Update cron job
-export async function updateJob(id: string, data: UpdateCronJobRequest): Promise<CronJob> {
+// Update a cron job
+export async function updateJob(id: string, data: Partial<CreateCronJobRequest>): Promise<CronJob> {
   return put<CronJob>(`/cron/jobs/${id}`, data);
 }
 
-// Delete cron job
+// Delete a cron job
 export async function deleteJob(id: string): Promise<void> {
   return del<void>(`/cron/jobs/${id}`);
 }
 
-// Run cron job manually
-export async function runJob(id: string): Promise<void> {
-  return post<void>(`/cron/jobs/${id}/run`);
+// Run a cron job immediately
+export async function runJob(id: string): Promise<CronJobLog> {
+  return post<CronJobLog>(`/cron/jobs/${id}/run`);
 }
 
 // Get cron job logs
-export async function getJobLogs(id: string, limit?: number): Promise<CronJobLog[]> {
+export async function getJobLogs(jobId: string, limit?: number): Promise<CronJobLog[]> {
   const params = limit ? { limit } : {};
-  return get<CronJobLog[]>(`/cron/jobs/${id}/logs`, params);
+  return get<CronJobLog[]>(`/cron/jobs/${jobId}/logs`, params);
 }
-
-
-

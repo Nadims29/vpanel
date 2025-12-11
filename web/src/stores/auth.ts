@@ -5,10 +5,10 @@ interface User {
   id: string;
   username: string;
   email: string;
-  displayName: string;
+  display_name: string;
   role: string;
   avatar?: string;
-  mfaEnabled: boolean;
+  mfa_enabled: boolean;
 }
 
 interface AuthState {
@@ -25,22 +25,16 @@ interface AuthState {
   refreshAuth: () => Promise<void>;
   updateUser: (user: Partial<User>) => void;
   clearError: () => void;
+  checkAuth: () => Promise<boolean>;
 }
 
 export const useAuthStore = create<AuthState>()(
   persist(
     (set, get) => ({
-      user: {
-        id: '1',
-        username: 'admin',
-        email: 'admin@vpanel.local',
-        displayName: 'Administrator',
-        role: 'admin',
-        mfaEnabled: false,
-      },
-      token: 'dev-token',
-      refreshToken: 'dev-refresh-token',
-      isAuthenticated: true,
+      user: null,
+      token: null,
+      refreshToken: null,
+      isAuthenticated: false,
       isLoading: false,
       error: null,
 
@@ -96,7 +90,10 @@ export const useAuthStore = create<AuthState>()(
 
       refreshAuth: async () => {
         const refreshToken = get().refreshToken;
-        if (!refreshToken) return;
+        if (!refreshToken) {
+          get().logout();
+          return;
+        }
 
         try {
           const response = await fetch('/api/auth/refresh', {
@@ -120,6 +117,34 @@ export const useAuthStore = create<AuthState>()(
         }
       },
 
+      checkAuth: async () => {
+        const token = get().token;
+        if (!token) {
+          return false;
+        }
+
+        try {
+          const response = await fetch('/api/profile', {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+
+          if (!response.ok) {
+            if (response.status === 401) {
+              // Try to refresh
+              await get().refreshAuth();
+              return get().isAuthenticated;
+            }
+            return false;
+          }
+
+          const data = await response.json();
+          set({ user: data.data, isAuthenticated: true });
+          return true;
+        } catch {
+          return false;
+        }
+      },
+
       updateUser: (userData: Partial<User>) => {
         const currentUser = get().user;
         if (currentUser) {
@@ -135,10 +160,8 @@ export const useAuthStore = create<AuthState>()(
         user: state.user,
         token: state.token,
         refreshToken: state.refreshToken,
-        // isAuthenticated: state.isAuthenticated,
-        isAuthenticated: true,
+        isAuthenticated: state.isAuthenticated,
       }),
     }
   )
 );
-

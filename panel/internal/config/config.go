@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/spf13/viper"
@@ -20,12 +21,12 @@ type Config struct {
 
 // ServerConfig holds HTTP server configuration
 type ServerConfig struct {
-	Port      int              `mapstructure:"port"`
-	Mode      string           `mapstructure:"mode"`
-	WebDir    string           `mapstructure:"web_dir"`
-	CORS      CORSConfig       `mapstructure:"cors"`
-	RateLimit RateLimitConfig  `mapstructure:"rate_limit"`
-	TLS       TLSConfig        `mapstructure:"tls"`
+	Port      int             `mapstructure:"port"`
+	Mode      string          `mapstructure:"mode"`
+	WebDir    string          `mapstructure:"web_dir"`
+	CORS      CORSConfig      `mapstructure:"cors"`
+	RateLimit RateLimitConfig `mapstructure:"rate_limit"`
+	TLS       TLSConfig       `mapstructure:"tls"`
 }
 
 // CORSConfig holds CORS configuration
@@ -66,7 +67,7 @@ func (c *DatabaseConfig) DSN() string {
 	switch c.Driver {
 	case "postgres":
 		return "host=" + c.Host +
-			" port=" + string(rune(c.Port)) +
+			" port=" + strconv.Itoa(c.Port) +
 			" user=" + c.Username +
 			" password=" + c.Password +
 			" dbname=" + c.Database +
@@ -80,13 +81,13 @@ func (c *DatabaseConfig) DSN() string {
 
 // AuthConfig holds authentication configuration
 type AuthConfig struct {
-	JWTSecret        string       `mapstructure:"jwt_secret"`
-	TokenExpiry      int          `mapstructure:"token_expiry"`       // minutes
-	RefreshExpiry    int          `mapstructure:"refresh_expiry"`     // days
-	SessionTimeout   int          `mapstructure:"session_timeout"`    // minutes
-	MaxLoginAttempts int          `mapstructure:"max_login_attempts"`
-	LockoutDuration  int          `mapstructure:"lockout_duration"`   // minutes
-	OAuth            OAuthConfig  `mapstructure:"oauth"`
+	JWTSecret        string      `mapstructure:"jwt_secret"`
+	TokenExpiry      int         `mapstructure:"token_expiry"`    // minutes
+	RefreshExpiry    int         `mapstructure:"refresh_expiry"`  // days
+	SessionTimeout   int         `mapstructure:"session_timeout"` // minutes
+	MaxLoginAttempts int         `mapstructure:"max_login_attempts"`
+	LockoutDuration  int         `mapstructure:"lockout_duration"` // minutes
+	OAuth            OAuthConfig `mapstructure:"oauth"`
 }
 
 // OAuthConfig holds OAuth provider configuration
@@ -188,11 +189,11 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("database.database", "./data/vpanel.db")
 
 	// Auth defaults
-	v.SetDefault("auth.token_expiry", 60)      // 1 hour
-	v.SetDefault("auth.refresh_expiry", 7)     // 7 days
-	v.SetDefault("auth.session_timeout", 30)   // 30 minutes
+	v.SetDefault("auth.token_expiry", 60)    // 1 hour
+	v.SetDefault("auth.refresh_expiry", 7)   // 7 days
+	v.SetDefault("auth.session_timeout", 30) // 30 minutes
 	v.SetDefault("auth.max_login_attempts", 5)
-	v.SetDefault("auth.lockout_duration", 15)  // 15 minutes
+	v.SetDefault("auth.lockout_duration", 15) // 15 minutes
 
 	// Plugin defaults
 	v.SetDefault("plugin.directory", "./plugins")
@@ -241,4 +242,3 @@ func ensureDirectories(cfg *Config) {
 		}
 	}
 }
-

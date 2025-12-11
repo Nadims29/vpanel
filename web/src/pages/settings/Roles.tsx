@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import {
   Plus,
@@ -26,6 +26,8 @@ import {
   Puzzle,
   FileText,
   Cloud,
+  Loader2,
+  AlertCircle,
 } from 'lucide-react';
 import {
   Button,
@@ -42,6 +44,8 @@ import {
 } from '@/components/ui';
 import { cn } from '@/utils/cn';
 import { useThemeStore } from '@/stores/theme';
+import * as rolesApi from '@/api/roles';
+import type { Role } from '@/api/roles';
 
 interface Permission {
   id: string;
@@ -51,16 +55,7 @@ interface Permission {
   actions: ('read' | 'write' | 'delete' | 'admin')[];
 }
 
-interface Role {
-  id: string;
-  name: string;
-  description: string;
-  type: 'system' | 'custom';
-  userCount: number;
-  permissions: { [key: string]: ('read' | 'write' | 'delete' | 'admin')[] };
-  createdAt: string;
-  updatedAt: string;
-}
+// Role interface is imported from API
 
 const permissionCategories = [
   {
@@ -172,98 +167,18 @@ const permissionCategories = [
   },
 ];
 
-const mockRoles: Role[] = [
-  {
-    id: '1',
-    name: 'Super Admin',
-    description: 'Full system access with all permissions',
-    type: 'system',
-    userCount: 1,
-    permissions: { '*': ['read', 'write', 'delete', 'admin'] },
-    createdAt: '2024-01-01',
-    updatedAt: '2024-01-01',
-  },
-  {
-    id: '2',
-    name: 'Admin',
-    description: 'Administrative access to most features',
-    type: 'system',
-    userCount: 2,
-    permissions: {
-      'docker.*': ['read', 'write', 'delete'],
-      'k8s.*': ['read', 'write', 'delete'],
-      'nginx.*': ['read', 'write', 'delete'],
-      'database.*': ['read', 'write'],
-      'files.*': ['read', 'write'],
-      'terminal.*': ['read'],
-      'settings.users': ['read'],
-    },
-    createdAt: '2024-01-01',
-    updatedAt: '2024-01-01',
-  },
-  {
-    id: '3',
-    name: 'Operator',
-    description: 'Operational access for day-to-day tasks',
-    type: 'system',
-    userCount: 5,
-    permissions: {
-      'docker.containers': ['read', 'write'],
-      'docker.images': ['read'],
-      'nginx.sites': ['read', 'write'],
-      'files.*': ['read', 'write'],
-      'terminal.access': ['read'],
-      'cron.jobs': ['read', 'write'],
-    },
-    createdAt: '2024-01-01',
-    updatedAt: '2024-01-01',
-  },
-  {
-    id: '4',
-    name: 'Viewer',
-    description: 'Read-only access to view resources',
-    type: 'system',
-    userCount: 8,
-    permissions: {
-      '*': ['read'],
-    },
-    createdAt: '2024-01-01',
-    updatedAt: '2024-01-01',
-  },
-  {
-    id: '5',
-    name: 'DevOps Engineer',
-    description: 'Custom role for DevOps team members',
-    type: 'custom',
-    userCount: 3,
-    permissions: {
-      'docker.*': ['read', 'write', 'delete'],
-      'k8s.*': ['read', 'write', 'delete'],
-      'nginx.*': ['read', 'write'],
-      'terminal.*': ['read'],
-    },
-    createdAt: '2024-06-15',
-    updatedAt: '2024-11-20',
-  },
-  {
-    id: '6',
-    name: 'Database Admin',
-    description: 'Full access to database management',
-    type: 'custom',
-    userCount: 2,
-    permissions: {
-      'database.*': ['read', 'write', 'delete', 'admin'],
-      'files.*': ['read'],
-      'terminal.*': ['read'],
-    },
-    createdAt: '2024-08-10',
-    updatedAt: '2024-10-05',
-  },
-];
+// Roles are loaded from API
 
-function RoleCard({ role }: { role: Role }) {
+function RoleCard({ 
+  role, 
+  onEdit, 
+  onDelete 
+}: { 
+  role: Role; 
+  onEdit: () => void;
+  onDelete: () => void;
+}) {
   const [showDelete, setShowDelete] = useState(false);
-  const [showEdit, setShowEdit] = useState(false);
   const resolvedMode = useThemeStore((state) => state.resolvedMode);
   const isLight = resolvedMode === 'light';
 
@@ -306,7 +221,7 @@ function RoleCard({ role }: { role: Role }) {
               </button>
             }
           >
-            <DropdownItem icon={<Edit className="w-4 h-4" />} onClick={() => setShowEdit(true)}>
+            <DropdownItem icon={<Edit className="w-4 h-4" />} onClick={onEdit}>
               {isSystemRole ? 'View' : 'Edit'}
             </DropdownItem>
             <DropdownItem icon={<Copy className="w-4 h-4" />}>Duplicate</DropdownItem>
@@ -328,7 +243,7 @@ function RoleCard({ role }: { role: Role }) {
             <span className={isLight ? 'text-gray-600' : 'text-gray-400'}>{role.userCount} users</span>
           </div>
           <div className={cn('text-xs', isLight ? 'text-gray-400' : 'text-gray-500')}>
-            Updated {role.updatedAt}
+            Updated {new Date(role.updatedAt).toLocaleDateString()}
           </div>
         </div>
       </motion.div>
@@ -336,24 +251,37 @@ function RoleCard({ role }: { role: Role }) {
       <ConfirmModal
         open={showDelete}
         onClose={() => setShowDelete(false)}
-        onConfirm={() => setShowDelete(false)}
+        onConfirm={() => {
+          setShowDelete(false);
+          onDelete();
+        }}
         type="danger"
         title="Delete Role"
         message={`Are you sure you want to delete "${role.name}"? Users with this role will be assigned to Viewer role.`}
         confirmText="Delete"
       />
-
-      <Modal open={showEdit} onClose={() => setShowEdit(false)} title={`${isSystemRole ? 'View' : 'Edit'} Role: ${role.name}`} size="xl">
-        <RoleEditor role={role} readOnly={isSystemRole} onClose={() => setShowEdit(false)} />
-      </Modal>
     </>
   );
 }
 
-function RoleEditor({ role, readOnly, onClose }: { role?: Role; readOnly?: boolean; onClose: () => void }) {
+function RoleEditor({ 
+  role, 
+  readOnly, 
+  onClose,
+  onSave 
+}: { 
+  role?: Role; 
+  readOnly?: boolean; 
+  onClose: () => void;
+  onSave?: (roleData: { name: string; description: string; permissions: { [key: string]: ('read' | 'write' | 'delete' | 'admin')[] } }) => void;
+}) {
   const resolvedMode = useThemeStore((state) => state.resolvedMode);
   const isLight = resolvedMode === 'light';
   const [expandedCategories, setExpandedCategories] = useState<string[]>(permissionCategories.map(c => c.id));
+  const [name, setName] = useState(role?.name || '');
+  const [description, setDescription] = useState(role?.description || '');
+  const [permissions, setPermissions] = useState<{ [key: string]: ('read' | 'write' | 'delete' | 'admin')[] }>(role?.permissions || {});
+  const [saving, setSaving] = useState(false);
 
   const toggleCategory = (categoryId: string) => {
     setExpandedCategories(prev =>
@@ -361,6 +289,74 @@ function RoleEditor({ role, readOnly, onClose }: { role?: Role; readOnly?: boole
         ? prev.filter(c => c !== categoryId)
         : [...prev, categoryId]
     );
+  };
+
+  const togglePermission = (categoryId: string, permissionId: string, action: 'read' | 'write' | 'delete' | 'admin') => {
+    if (readOnly) return;
+    
+    const key = `${categoryId}.${permissionId}`;
+    const wildcardKey = `${categoryId}.*`;
+    const allKey = '*';
+    
+    setPermissions(prev => {
+      const newPerms = { ...prev };
+      
+      // Check if wildcard or all permissions exist
+      const hasWildcard = newPerms[wildcardKey]?.includes(action);
+      const hasAll = newPerms[allKey]?.includes(action);
+      const hasSpecific = newPerms[key]?.includes(action);
+      
+      if (hasAll || hasWildcard || hasSpecific) {
+        // Remove permission
+        if (newPerms[key]) {
+          newPerms[key] = newPerms[key].filter(a => a !== action);
+          if (newPerms[key].length === 0) delete newPerms[key];
+        }
+        if (newPerms[wildcardKey]) {
+          newPerms[wildcardKey] = newPerms[wildcardKey].filter(a => a !== action);
+          if (newPerms[wildcardKey].length === 0) delete newPerms[wildcardKey];
+        }
+        if (newPerms[allKey]) {
+          newPerms[allKey] = newPerms[allKey].filter(a => a !== action);
+          if (newPerms[allKey].length === 0) delete newPerms[allKey];
+        }
+      } else {
+        // Add permission
+        if (!newPerms[key]) {
+          newPerms[key] = [];
+        }
+        if (!newPerms[key].includes(action)) {
+          newPerms[key].push(action);
+        }
+      }
+      
+      return newPerms;
+    });
+  };
+
+  const hasPermission = (categoryId: string, permissionId: string, action: 'read' | 'write' | 'delete' | 'admin'): boolean => {
+    const key = `${categoryId}.${permissionId}`;
+    const wildcardKey = `${categoryId}.*`;
+    const allKey = '*';
+    
+    return !!(
+      permissions[allKey]?.includes(action) ||
+      permissions[wildcardKey]?.includes(action) ||
+      permissions[key]?.includes(action)
+    );
+  };
+
+  const handleSave = async () => {
+    if (!onSave || readOnly) return;
+    try {
+      setSaving(true);
+      await onSave({ name, description, permissions });
+      onClose();
+    } catch (error) {
+      console.error('Failed to save role:', error);
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -371,13 +367,23 @@ function RoleEditor({ role, readOnly, onClose }: { role?: Role; readOnly?: boole
             <label className={cn('block text-sm font-medium mb-1.5', isLight ? 'text-gray-700' : 'text-gray-300')}>
               Role Name
             </label>
-            <Input defaultValue={role?.name} placeholder="Enter role name" />
+            <Input 
+              value={name} 
+              onChange={(e) => setName(e.target.value)}
+              placeholder="Enter role name" 
+              disabled={saving}
+            />
           </div>
           <div>
             <label className={cn('block text-sm font-medium mb-1.5', isLight ? 'text-gray-700' : 'text-gray-300')}>
               Description
             </label>
-            <Input defaultValue={role?.description} placeholder="Enter description" />
+            <Input 
+              value={description} 
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="Enter description" 
+              disabled={saving}
+            />
           </div>
         </div>
       )}
@@ -422,17 +428,17 @@ function RoleEditor({ role, readOnly, onClose }: { role?: Role; readOnly?: boole
                       <thead>
                         <tr className={isLight ? 'text-gray-500' : 'text-gray-400'}>
                           <th className="text-left py-2 font-medium">Permission</th>
-                          <th className="text-center py-2 font-medium w-16">
-                            <Eye className="w-4 h-4 mx-auto" title="Read" />
+                          <th className="text-center py-2 font-medium w-16" title="Read">
+                            <Eye className="w-4 h-4 mx-auto" />
                           </th>
-                          <th className="text-center py-2 font-medium w-16">
-                            <Pencil className="w-4 h-4 mx-auto" title="Write" />
+                          <th className="text-center py-2 font-medium w-16" title="Write">
+                            <Pencil className="w-4 h-4 mx-auto" />
                           </th>
-                          <th className="text-center py-2 font-medium w-16">
-                            <Trash2 className="w-4 h-4 mx-auto" title="Delete" />
+                          <th className="text-center py-2 font-medium w-16" title="Delete">
+                            <Trash2 className="w-4 h-4 mx-auto" />
                           </th>
-                          <th className="text-center py-2 font-medium w-16">
-                            <Lock className="w-4 h-4 mx-auto" title="Admin" />
+                          <th className="text-center py-2 font-medium w-16" title="Admin">
+                            <Lock className="w-4 h-4 mx-auto" />
                           </th>
                         </tr>
                       </thead>
@@ -451,10 +457,9 @@ function RoleEditor({ role, readOnly, onClose }: { role?: Role; readOnly?: boole
                               <td key={action} className="text-center py-2">
                                 <input
                                   type="checkbox"
-                                  disabled={readOnly}
-                                  defaultChecked={role?.permissions['*']?.includes(action as any) || 
-                                    role?.permissions[`${category.id}.*`]?.includes(action as any) ||
-                                    role?.permissions[`${category.id}.${permission.id}`]?.includes(action as any)}
+                                  disabled={readOnly || saving}
+                                  checked={hasPermission(category.id, permission.id, action as any)}
+                                  onChange={() => togglePermission(category.id, permission.id, action as any)}
                                   className="rounded"
                                 />
                               </td>
@@ -475,28 +480,120 @@ function RoleEditor({ role, readOnly, onClose }: { role?: Role; readOnly?: boole
         'flex justify-end gap-3 pt-4 border-t',
         isLight ? 'border-gray-200' : 'border-gray-700'
       )}>
-        <Button variant="secondary" onClick={onClose}>
+        <Button variant="secondary" onClick={onClose} disabled={saving}>
           {readOnly ? 'Close' : 'Cancel'}
         </Button>
-        {!readOnly && <Button>Save Role</Button>}
+        {!readOnly && (
+          <Button onClick={handleSave} disabled={saving || !name.trim()}>
+            {saving ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                Saving...
+              </>
+            ) : (
+              'Save Role'
+            )}
+          </Button>
+        )}
       </div>
     </div>
   );
 }
 
 export default function RolesPage() {
+  const [roles, setRoles] = useState<Role[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [showCreate, setShowCreate] = useState(false);
+  const [editingRole, setEditingRole] = useState<Role | null>(null);
+  const [showEdit, setShowEdit] = useState(false);
   const resolvedMode = useThemeStore((state) => state.resolvedMode);
   const isLight = resolvedMode === 'light';
 
-  const filteredRoles = mockRoles.filter((r) =>
+  // Load roles
+  useEffect(() => {
+    loadRoles();
+  }, []);
+
+  async function loadRoles() {
+    try {
+      setLoading(true);
+      setError(null);
+      const data = await rolesApi.listRoles();
+      setRoles(data);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load roles');
+      console.error('Failed to load roles:', err);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  const filteredRoles = roles.filter((r) =>
     r.name.toLowerCase().includes(search.toLowerCase()) ||
     r.description.toLowerCase().includes(search.toLowerCase())
   );
 
   const systemRoles = filteredRoles.filter(r => r.type === 'system');
   const customRoles = filteredRoles.filter(r => r.type === 'custom');
+
+  // Handle create role
+  async function handleCreateRole(roleData: { name: string; description: string; permissions: { [key: string]: ('read' | 'write' | 'delete' | 'admin')[] } }) {
+    try {
+      setError(null);
+      // TODO: Implement when backend supports custom roles
+      await rolesApi.createRole(roleData);
+      await loadRoles();
+      setShowCreate(false);
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to create role';
+      setError(errorMessage);
+      if (!errorMessage.includes('not yet supported')) {
+        throw err;
+      }
+    }
+  }
+
+  // Handle edit role
+  function handleEditClick(role: Role) {
+    setEditingRole(role);
+    setShowEdit(true);
+  }
+
+  async function handleUpdateRole(roleData: { name: string; description: string; permissions: { [key: string]: ('read' | 'write' | 'delete' | 'admin')[] } }) {
+    if (!editingRole) return;
+    try {
+      setError(null);
+      // TODO: Implement when backend supports role updates
+      await rolesApi.updateRole(editingRole.id, roleData);
+      await loadRoles();
+      setShowEdit(false);
+      setEditingRole(null);
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to update role';
+      setError(errorMessage);
+      if (!errorMessage.includes('not yet supported')) {
+        throw err;
+      }
+    }
+  }
+
+  // Handle delete role
+  async function handleDeleteRole(role: Role) {
+    try {
+      setError(null);
+      // TODO: Implement when backend supports role deletion
+      await rolesApi.deleteRole(role.id);
+      await loadRoles();
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to delete role';
+      setError(errorMessage);
+      if (!errorMessage.includes('not yet supported')) {
+        console.error('Failed to delete role:', err);
+      }
+    }
+  }
 
   return (
     <div>
@@ -510,6 +607,23 @@ export default function RolesPage() {
           Create Role
         </Button>
       </div>
+
+      {/* Error Message */}
+      {error && (
+        <div className={cn(
+          'mb-4 p-4 rounded-lg flex items-center gap-2',
+          isLight ? 'bg-yellow-50 text-yellow-700 border border-yellow-200' : 'bg-yellow-900/20 text-yellow-400 border border-yellow-800'
+        )}>
+          <AlertCircle className="w-5 h-5" />
+          <span>{error}</span>
+          <button
+            onClick={() => setError(null)}
+            className={cn('ml-auto text-sm underline')}
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
 
       {/* Search */}
       <div className="mb-6 max-w-md">
@@ -526,11 +640,24 @@ export default function RolesPage() {
         <h2 className={cn('text-lg font-semibold mb-4', isLight ? 'text-gray-900' : 'text-gray-100')}>
           System Roles
         </h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {systemRoles.map((role) => (
-            <RoleCard key={role.id} role={role} />
-          ))}
-        </div>
+        {loading ? (
+          <Card padding>
+            <div className="py-12 flex items-center justify-center">
+              <Loader2 className="w-8 h-8 animate-spin text-gray-400" />
+            </div>
+          </Card>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {systemRoles.map((role) => (
+              <RoleCard 
+                key={role.id} 
+                role={role}
+                onEdit={() => handleEditClick(role)}
+                onDelete={() => handleDeleteRole(role)}
+              />
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Custom Roles */}
@@ -538,10 +665,21 @@ export default function RolesPage() {
         <h2 className={cn('text-lg font-semibold mb-4', isLight ? 'text-gray-900' : 'text-gray-100')}>
           Custom Roles
         </h2>
-        {customRoles.length > 0 ? (
+        {loading ? (
+          <Card padding>
+            <div className="py-12 flex items-center justify-center">
+              <Loader2 className="w-8 h-8 animate-spin text-gray-400" />
+            </div>
+          </Card>
+        ) : customRoles.length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {customRoles.map((role) => (
-              <RoleCard key={role.id} role={role} />
+              <RoleCard 
+                key={role.id} 
+                role={role}
+                onEdit={() => handleEditClick(role)}
+                onDelete={() => handleDeleteRole(role)}
+              />
             ))}
           </div>
         ) : (
@@ -549,7 +687,7 @@ export default function RolesPage() {
             <Empty
               icon={<Shield className="w-8 h-8" />}
               title="No custom roles"
-              description="Create custom roles to define specific permissions"
+              description="Create custom roles to define specific permissions. Note: Custom roles require backend support."
               action={
                 <Button leftIcon={<Plus className="w-4 h-4" />} onClick={() => setShowCreate(true)}>
                   Create Role
@@ -562,7 +700,31 @@ export default function RolesPage() {
 
       {/* Create Role Modal */}
       <Modal open={showCreate} onClose={() => setShowCreate(false)} title="Create New Role" size="xl">
-        <RoleEditor onClose={() => setShowCreate(false)} />
+        <RoleEditor 
+          onClose={() => setShowCreate(false)}
+          onSave={handleCreateRole}
+        />
+      </Modal>
+
+      {/* Edit Role Modal */}
+      <Modal 
+        open={showEdit} 
+        onClose={() => {
+          setShowEdit(false);
+          setEditingRole(null);
+        }} 
+        title={`${editingRole?.type === 'system' ? 'View' : 'Edit'} Role: ${editingRole?.name || ''}`} 
+        size="xl"
+      >
+        <RoleEditor 
+          role={editingRole || undefined}
+          readOnly={editingRole?.type === 'system'}
+          onClose={() => {
+            setShowEdit(false);
+            setEditingRole(null);
+          }}
+          onSave={handleUpdateRole}
+        />
       </Modal>
     </div>
   );

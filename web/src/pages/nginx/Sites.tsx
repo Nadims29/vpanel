@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Plus,
@@ -37,8 +37,12 @@ import {
   Input,
   Select,
   Switch,
+  Spinner,
 } from '@/components/ui';
 import { cn } from '@/utils/cn';
+import toast from 'react-hot-toast';
+import * as nginxApi from '@/api/nginx';
+import type { NginxSite, CreateSiteRequest, SiteAnalytics } from '@/api/nginx';
 
 interface Site {
   id: string;
@@ -55,58 +59,49 @@ interface Site {
   created: string;
 }
 
-const mockSites: Site[] = [
-  {
-    id: '1',
-    domain: 'example.com',
-    aliases: ['www.example.com'],
-    ssl: true,
-    sslExpiry: '2024-06-15',
-    status: 'active',
-    type: 'static',
-    rootPath: '/var/www/example.com',
-    traffic: { requests: 125000, bandwidth: '2.5 GB' },
-    created: '2024-01-01',
-  },
-  {
-    id: '2',
-    domain: 'api.example.com',
-    aliases: [],
-    ssl: true,
-    sslExpiry: '2024-06-15',
-    status: 'active',
-    type: 'proxy',
-    proxyTarget: 'http://localhost:3000',
-    traffic: { requests: 450000, bandwidth: '8.2 GB' },
-    created: '2024-01-05',
-  },
-  {
-    id: '3',
-    domain: 'blog.example.com',
-    aliases: [],
-    ssl: false,
-    status: 'active',
-    type: 'php',
-    rootPath: '/var/www/blog',
-    phpVersion: '8.2',
-    traffic: { requests: 85000, bandwidth: '1.8 GB' },
-    created: '2024-01-10',
-  },
-  {
-    id: '4',
-    domain: 'staging.example.com',
-    aliases: [],
-    ssl: true,
-    sslExpiry: '2024-07-20',
-    status: 'disabled',
-    type: 'proxy',
-    proxyTarget: 'http://localhost:4000',
-    traffic: { requests: 5000, bandwidth: '120 MB' },
-    created: '2024-01-15',
-  },
-];
+// Convert backend NginxSite to frontend Site format
+function convertSite(backendSite: NginxSite, analytics?: SiteAnalytics): Site {
+  // Determine site type
+  let type: 'static' | 'proxy' | 'php' = 'static';
+  if (backendSite.proxy_enabled) {
+    type = 'proxy';
+  } else if (backendSite.php_enabled) {
+    type = 'php';
+  }
 
-function SiteCard({ site }: { site: Site }) {
+  // Get traffic data from analytics
+  const traffic = analytics ? {
+    requests: analytics.requests,
+    bandwidth: analytics.bandwidth,
+  } : { requests: 0, bandwidth: '0 B' };
+
+  return {
+    id: backendSite.id,
+    domain: backendSite.domain,
+    aliases: backendSite.aliases || [],
+    ssl: backendSite.ssl_enabled,
+    sslExpiry: undefined, // Will be fetched from certificate if needed
+    status: backendSite.enabled ? 'active' : 'disabled',
+    type,
+    proxyTarget: backendSite.proxy_target,
+    rootPath: backendSite.root_path,
+    phpVersion: backendSite.php_version,
+    traffic,
+    created: backendSite.created_at,
+  };
+}
+
+function SiteCard({ 
+  site, 
+  onEnable, 
+  onDisable, 
+  onDelete 
+}: { 
+  site: Site;
+  onEnable: () => void;
+  onDisable: () => void;
+  onDelete: () => void;
+}) {
   const [showDelete, setShowDelete] = useState(false);
   const [showEdit, setShowEdit] = useState(false);
 
@@ -160,7 +155,10 @@ function SiteCard({ site }: { site: Site }) {
             <DropdownItem icon={<Settings className="w-4 h-4" />} onClick={() => setShowEdit(true)}>
               Edit Configuration
             </DropdownItem>
-            <DropdownItem icon={site.status === 'active' ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}>
+            <DropdownItem 
+              icon={site.status === 'active' ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
+              onClick={() => site.status === 'active' ? onDisable() : onEnable()}
+            >
               {site.status === 'active' ? 'Disable' : 'Enable'}
             </DropdownItem>
             <DropdownItem icon={<RefreshCw className="w-4 h-4" />}>Reload</DropdownItem>
@@ -241,7 +239,10 @@ function SiteCard({ site }: { site: Site }) {
       <ConfirmModal
         open={showDelete}
         onClose={() => setShowDelete(false)}
-        onConfirm={() => setShowDelete(false)}
+        onConfirm={() => {
+          onDelete();
+          setShowDelete(false);
+        }}
         type="danger"
         title="Delete Site"
         message={`Are you sure you want to delete "${site.domain}"? This will remove all configuration files.`}
@@ -333,8 +334,89 @@ export default function NginxSites() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [showCreate, setShowCreate] = useState(false);
+  const [sites, setSites] = useState<Site[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [reloading, setReloading] = useState(false);
 
-  const filteredSites = mockSites.filter((s) => {
+  const fetchSites = useCallback(async () => {
+    try {
+      setLoading(true);
+      const backendSites = await nginxApi.listSites();
+      
+      // Fetch analytics for each site
+      const sitesWithAnalytics = await Promise.all(
+        backendSites.map(async (backendSite) => {
+          try {
+            const analytics = await nginxApi.getSiteAnalytics(backendSite.id, 30);
+            return convertSite(backendSite, analytics);
+          } catch (error) {
+            // If analytics fails, use site without analytics
+            return convertSite(backendSite);
+          }
+        })
+      );
+      
+      setSites(sitesWithAnalytics);
+    } catch (error) {
+      console.error('Failed to fetch sites:', error);
+      toast.error(error instanceof Error ? error.message : 'Failed to fetch sites');
+      setSites([]);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchSites();
+  }, [fetchSites]);
+
+  const handleReloadNginx = useCallback(async () => {
+    try {
+      setReloading(true);
+      await nginxApi.reloadNginx();
+      toast.success('Nginx reloaded successfully');
+    } catch (error) {
+      console.error('Failed to reload nginx:', error);
+      toast.error(error instanceof Error ? error.message : 'Failed to reload nginx');
+    } finally {
+      setReloading(false);
+    }
+  }, []);
+
+  const handleEnableSite = useCallback(async (id: string) => {
+    try {
+      await nginxApi.enableSite(id);
+      toast.success('Site enabled');
+      fetchSites();
+    } catch (error) {
+      console.error('Failed to enable site:', error);
+      toast.error(error instanceof Error ? error.message : 'Failed to enable site');
+    }
+  }, [fetchSites]);
+
+  const handleDisableSite = useCallback(async (id: string) => {
+    try {
+      await nginxApi.disableSite(id);
+      toast.success('Site disabled');
+      fetchSites();
+    } catch (error) {
+      console.error('Failed to disable site:', error);
+      toast.error(error instanceof Error ? error.message : 'Failed to disable site');
+    }
+  }, [fetchSites]);
+
+  const handleDeleteSite = useCallback(async (id: string) => {
+    try {
+      await nginxApi.deleteSite(id);
+      toast.success('Site deleted');
+      fetchSites();
+    } catch (error) {
+      console.error('Failed to delete site:', error);
+      toast.error(error instanceof Error ? error.message : 'Failed to delete site');
+    }
+  }, [fetchSites]);
+
+  const filteredSites = sites.filter((s) => {
     const matchesSearch = s.domain.toLowerCase().includes(search.toLowerCase());
     const matchesStatus = statusFilter === 'all' || s.status === statusFilter;
     return matchesSearch && matchesStatus;
@@ -349,7 +431,12 @@ export default function NginxSites() {
           <p className="text-dark-400">Manage Nginx sites and virtual hosts</p>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="secondary" leftIcon={<RefreshCw className="w-4 h-4" />}>
+          <Button 
+            variant="secondary" 
+            leftIcon={<RefreshCw className={cn("w-4 h-4", reloading && "animate-spin")} />}
+            onClick={handleReloadNginx}
+            disabled={reloading}
+          >
             Reload Nginx
           </Button>
           <Button leftIcon={<Plus className="w-5 h-5" />} onClick={() => setShowCreate(true)}>
@@ -361,19 +448,21 @@ export default function NginxSites() {
       {/* Stats */}
       <div className="grid grid-cols-4 gap-4 mb-6">
         <Card padding className="text-center">
-          <p className="text-3xl font-bold text-dark-100">{mockSites.length}</p>
+          <p className="text-3xl font-bold text-dark-100">{sites.length}</p>
           <p className="text-sm text-dark-400">Total Sites</p>
         </Card>
         <Card padding className="text-center">
-          <p className="text-3xl font-bold text-green-400">{mockSites.filter(s => s.status === 'active').length}</p>
+          <p className="text-3xl font-bold text-green-400">{sites.filter(s => s.status === 'active').length}</p>
           <p className="text-sm text-dark-400">Active</p>
         </Card>
         <Card padding className="text-center">
-          <p className="text-3xl font-bold text-primary-400">{mockSites.filter(s => s.ssl).length}</p>
+          <p className="text-3xl font-bold text-primary-400">{sites.filter(s => s.ssl).length}</p>
           <p className="text-sm text-dark-400">SSL Enabled</p>
         </Card>
         <Card padding className="text-center">
-          <p className="text-3xl font-bold text-dark-100">665K</p>
+          <p className="text-3xl font-bold text-dark-100">
+            {sites.reduce((sum, s) => sum + s.traffic.requests, 0).toLocaleString()}
+          </p>
           <p className="text-sm text-dark-400">Total Requests</p>
         </Card>
       </div>
@@ -398,11 +487,22 @@ export default function NginxSites() {
       </div>
 
       {/* Sites Grid */}
-      {filteredSites.length > 0 ? (
+      {loading ? (
+        <Card padding className="text-center py-12">
+          <Spinner className="mx-auto mb-4" />
+          <p className="text-dark-400">Loading sites...</p>
+        </Card>
+      ) : filteredSites.length > 0 ? (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           <AnimatePresence>
             {filteredSites.map((site) => (
-              <SiteCard key={site.id} site={site} />
+              <SiteCard 
+                key={site.id} 
+                site={site}
+                onEnable={() => handleEnableSite(site.id)}
+                onDisable={() => handleDisableSite(site.id)}
+                onDelete={() => handleDeleteSite(site.id)}
+              />
             ))}
           </AnimatePresence>
         </div>
@@ -411,7 +511,7 @@ export default function NginxSites() {
           <Empty
             icon={<Globe className="w-8 h-8 text-dark-500" />}
             title="No sites found"
-            description="Add your first site to get started"
+            description={search || statusFilter !== 'all' ? "No sites match your filters" : "Add your first site to get started"}
             action={
               <Button leftIcon={<Plus className="w-5 h-5" />} onClick={() => setShowCreate(true)}>
                 Add Site

@@ -1,0 +1,77 @@
+# VPanel Configuration File - Development
+# https://vpanel.io/docs/configuration
+
+server:
+  port: 8080
+  mode: debug  # debug, release
+  web_dir: ../web/dist  # 开发模式下前端由 Vite 单独运行，这里可以留空或指向构建目录
+  
+  cors:
+    enabled: true
+    allowed_origins:
+      - "*"
+    allowed_methods:
+      - GET
+      - POST
+      - PUT
+      - DELETE
+      - OPTIONS
+    allowed_headers:
+      - "*"
+  
+  rate_limit:
+    enabled: false  # 开发模式下可以关闭限流
+    requests: 100
+    window: 60  # seconds
+  
+  tls:
+    enabled: false
+    cert_file: ""
+    key_file: ""
+
+database:
+  driver: sqlite  # sqlite, postgres
+  database: ./data/vpanel.db
+  # PostgreSQL settings (开发环境通常使用 sqlite)
+  # host: localhost
+  # port: 5432
+  # username: vpanel
+  # password: ""
+  # ssl_mode: disable
+
+auth:
+  jwt_secret: ""  # Auto-generated if empty
+  token_expiry: 60  # minutes
+  refresh_expiry: 7  # days
+  session_timeout: 30  # minutes
+  max_login_attempts: 5
+  lockout_duration: 15  # minutes
+  
+  oauth:
+    github:
+      enabled: false
+      client_id: ""
+      client_secret: ""
+      redirect_url: ""
+    google:
+      enabled: false
+      client_id: ""
+      client_secret: ""
+      redirect_url: ""
+
+plugin:
+  directory: ./plugins
+  data_directory: ./data/plugins
+  market_url: https://market.vpanel.io
+  auto_update: false
+
+storage:
+  data_dir: ./data
+  temp_dir: ./data/temp
+  backup_dir: ./data/backups
+  log_dir: ./logs
+
+logging:
+  level: debug  # debug, info, warn, error - 开发模式使用 debug
+  format: console  # json, console - 开发模式使用 console 更易读
+  output: stdout  # stdout, file

@@ -268,3 +268,4 @@ jobs:
           script: |
             cd /opt/vpanel-docs
             docker compose restart || docker compose up -d
+

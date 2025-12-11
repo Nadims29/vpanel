@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Plus,
@@ -40,6 +40,8 @@ import {
 } from '@/components/ui';
 import { cn } from '@/utils/cn';
 import { useThemeStore } from '@/stores/theme';
+import * as databaseApi from '@/api/database';
+import type { DatabaseBackup as ApiDatabaseBackup } from '@/api/database';
 
 type BackupStatus = 'completed' | 'running' | 'failed' | 'scheduled';
 type BackupType = 'full' | 'incremental' | 'differential';
@@ -49,7 +51,8 @@ interface Backup {
   name: string;
   database: string;
   server: string;
-  serverType: 'mysql' | 'postgresql' | 'mongodb';
+  serverId: string;
+  serverType: 'mysql' | 'postgresql' | 'mongodb' | 'redis' | 'mariadb';
   type: BackupType;
   status: BackupStatus;
   size: string;
@@ -59,6 +62,64 @@ interface Backup {
   retention: string;
   compressed: boolean;
   encrypted: boolean;
+}
+
+// Helper function to convert API backup to display format
+function convertBackup(apiBackup: ApiDatabaseBackup, servers: databaseApi.DatabaseServer[]): Backup {
+  const server = servers.find(s => s.id === apiBackup.server_id);
+  const serverName = server?.name || 'Unknown Server';
+  const serverType = server?.type || 'mysql';
+
+  // Map API status to display status
+  let displayStatus: BackupStatus = 'completed';
+  if (apiBackup.status === 'in_progress') displayStatus = 'running';
+  else if (apiBackup.status === 'failed') displayStatus = 'failed';
+
+  // Format file size
+  const sizeInMB = apiBackup.file_size / (1024 * 1024);
+  const sizeStr = sizeInMB > 1024 
+    ? `${(sizeInMB / 1024).toFixed(2)} GB`
+    : `${sizeInMB.toFixed(2)} MB`;
+
+  // Format date
+  const createdAt = apiBackup.created_at 
+    ? new Date(apiBackup.created_at).toLocaleString()
+    : 'Unknown';
+
+  // Calculate duration (if completed)
+  let duration = '-';
+  if (apiBackup.status === 'completed' && apiBackup.completed_at && apiBackup.created_at) {
+    const start = new Date(apiBackup.created_at).getTime();
+    const end = new Date(apiBackup.completed_at).getTime();
+    const diff = Math.floor((end - start) / 1000); // seconds
+    if (diff < 60) {
+      duration = `${diff}s`;
+    } else if (diff < 3600) {
+      duration = `${Math.floor(diff / 60)}m ${diff % 60}s`;
+    } else {
+      duration = `${Math.floor(diff / 3600)}h ${Math.floor((diff % 3600) / 60)}m`;
+    }
+  } else if (apiBackup.status === 'in_progress') {
+    duration = 'Running...';
+  }
+
+  return {
+    id: apiBackup.id,
+    name: apiBackup.file_name,
+    database: apiBackup.database,
+    server: serverName,
+    serverId: apiBackup.server_id,
+    serverType: serverType as any,
+    type: 'full', // API doesn't distinguish, default to full
+    status: displayStatus,
+    size: sizeStr,
+    createdAt,
+    duration,
+    storage: 'local', // Default, can be extended later
+    retention: '30 days', // Default, can be extended later
+    compressed: true, // Default, can be extended later
+    encrypted: false, // Default, can be extended later
+  };
 }
 
 interface ScheduledBackup {
@@ -75,89 +136,6 @@ interface ScheduledBackup {
   retention: string;
   storage: 'local' | 's3' | 'gcs' | 'azure';
 }
-
-const mockBackups: Backup[] = [
-  {
-    id: '1',
-    name: 'app_production_20241206_020000',
-    database: 'app_production',
-    server: 'Production MySQL',
-    serverType: 'mysql',
-    type: 'full',
-    status: 'completed',
-    size: '2.4 GB',
-    createdAt: '2024-12-06 02:00:00',
-    duration: '15m 32s',
-    storage: 's3',
-    retention: '30 days',
-    compressed: true,
-    encrypted: true,
-  },
-  {
-    id: '2',
-    name: 'app_production_20241205_140000',
-    database: 'app_production',
-    server: 'Production MySQL',
-    serverType: 'mysql',
-    type: 'incremental',
-    status: 'completed',
-    size: '156 MB',
-    createdAt: '2024-12-05 14:00:00',
-    duration: '2m 18s',
-    storage: 's3',
-    retention: '7 days',
-    compressed: true,
-    encrypted: true,
-  },
-  {
-    id: '3',
-    name: 'analytics_20241206_030000',
-    database: 'analytics',
-    server: 'Production PostgreSQL',
-    serverType: 'postgresql',
-    type: 'full',
-    status: 'running',
-    size: '~5.2 GB',
-    createdAt: '2024-12-06 03:00:00',
-    duration: '8m 45s (running)',
-    storage: 'local',
-    retention: '14 days',
-    compressed: true,
-    encrypted: false,
-  },
-  {
-    id: '4',
-    name: 'logs_20241206_010000',
-    database: 'logs',
-    server: 'Production MySQL',
-    serverType: 'mysql',
-    type: 'full',
-    status: 'failed',
-    size: '-',
-    createdAt: '2024-12-06 01:00:00',
-    duration: '-',
-    storage: 'local',
-    retention: '3 days',
-    compressed: true,
-    encrypted: false,
-  },
-  {
-    id: '5',
-    name: 'mongodb_cluster_20241205_220000',
-    database: 'all',
-    server: 'MongoDB Cluster',
-    serverType: 'mongodb',
-    type: 'full',
-    status: 'completed',
-    size: '48.6 GB',
-    createdAt: '2024-12-05 22:00:00',
-    duration: '1h 12m',
-    storage: 'gcs',
-    retention: '90 days',
-    compressed: true,
-    encrypted: true,
-  },
-];
 
 const mockSchedules: ScheduledBackup[] = [
   {
@@ -252,10 +230,25 @@ const dbTypeIcons = {
   mongodb: '🍃',
 };
 
-function BackupRow({ backup }: { backup: Backup }) {
+function BackupRow({ backup, onDelete }: { backup: Backup; onDelete: () => void }) {
   const [showDelete, setShowDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const resolvedMode = useThemeStore((state) => state.resolvedMode);
   const isLight = resolvedMode === 'light';
+
+  const handleDelete = async () => {
+    setDeleting(true);
+    try {
+      await databaseApi.deleteBackup(backup.id);
+      setShowDelete(false);
+      onDelete();
+    } catch (error) {
+      console.error('Failed to delete backup:', error);
+      alert('Failed to delete backup');
+    } finally {
+      setDeleting(false);
+    }
+  };
   const status = statusConfig[backup.status];
   const StatusIcon = status.icon;
 
@@ -344,11 +337,12 @@ function BackupRow({ backup }: { backup: Backup }) {
       <ConfirmModal
         open={showDelete}
         onClose={() => setShowDelete(false)}
-        onConfirm={() => setShowDelete(false)}
+        onConfirm={handleDelete}
         type="danger"
         title="Delete Backup"
         message={`Are you sure you want to delete "${backup.name}"? This action cannot be undone.`}
-        confirmText="Delete"
+        confirmText={deleting ? "Deleting..." : "Delete"}
+        disabled={deleting}
       />
     </>
   );
@@ -458,10 +452,71 @@ export default function DatabaseBackups() {
   const [search, setSearch] = useState('');
   const [showCreate, setShowCreate] = useState(false);
   const [showSchedule, setShowSchedule] = useState(false);
+  const [backups, setBackups] = useState<Backup[]>([]);
+  const [servers, setServers] = useState<databaseApi.DatabaseServer[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const resolvedMode = useThemeStore((state) => state.resolvedMode);
   const isLight = resolvedMode === 'light';
 
-  const filteredBackups = mockBackups.filter((b) =>
+  // Form state for creating backup
+  const [formData, setFormData] = useState({
+    serverId: '',
+    database: '',
+    type: 'manual' as 'manual' | 'scheduled',
+  });
+  const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    fetchData();
+  }, []);
+
+  const fetchData = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const [backupsData, serversData] = await Promise.all([
+        databaseApi.listBackups(),
+        databaseApi.listServers(),
+      ]);
+      setServers(serversData);
+      setBackups(backupsData.map(b => convertBackup(b, serversData)));
+    } catch (err) {
+      console.error('Failed to fetch backups:', err);
+      setError('Failed to load backups');
+      setBackups([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCreateBackup = async () => {
+    if (!formData.serverId || !formData.database) {
+      alert('Please select a server and database');
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      await databaseApi.createBackup(formData.serverId, {
+        database: formData.database,
+        type: formData.type,
+      });
+      setShowCreate(false);
+      setFormData({ serverId: '', database: '', type: 'manual' });
+      // Refresh backups after a short delay to allow backup to start
+      setTimeout(() => {
+        fetchData();
+      }, 1000);
+    } catch (err: any) {
+      console.error('Failed to create backup:', err);
+      alert(err?.message || 'Failed to create backup');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const filteredBackups = backups.filter((b) =>
     b.name.toLowerCase().includes(search.toLowerCase()) ||
     b.database.toLowerCase().includes(search.toLowerCase()) ||
     b.server.toLowerCase().includes(search.toLowerCase())
@@ -473,7 +528,7 @@ export default function DatabaseBackups() {
   );
 
   // Calculate stats
-  const totalSize = mockBackups
+  const totalSize = backups
     .filter((b) => b.status === 'completed')
     .reduce((acc, b) => {
       const size = parseFloat(b.size);
@@ -508,7 +563,7 @@ export default function DatabaseBackups() {
           </div>
           <div>
             <p className={cn('text-2xl font-bold', isLight ? 'text-gray-900' : 'text-gray-100')}>
-              {mockBackups.length}
+              {backups.length}
             </p>
             <p className={cn('text-sm', isLight ? 'text-gray-600' : 'text-gray-400')}>Total Backups</p>
           </div>
@@ -519,7 +574,7 @@ export default function DatabaseBackups() {
           </div>
           <div>
             <p className={cn('text-2xl font-bold', isLight ? 'text-gray-900' : 'text-gray-100')}>
-              {mockBackups.filter((b) => b.status === 'completed').length}
+              {backups.filter((b) => b.status === 'completed').length}
             </p>
             <p className={cn('text-sm', isLight ? 'text-gray-600' : 'text-gray-400')}>Completed</p>
           </div>
@@ -551,7 +606,7 @@ export default function DatabaseBackups() {
       {/* Tabs */}
       <Tabs className="mb-6">
         <Tab active={activeTab === 'backups'} onClick={() => setActiveTab('backups')}>
-          Backups ({mockBackups.length})
+          Backups ({backups.length})
         </Tab>
         <Tab active={activeTab === 'schedules'} onClick={() => setActiveTab('schedules')}>
           Schedules ({mockSchedules.length})
@@ -593,12 +648,37 @@ export default function DatabaseBackups() {
                 </tr>
               </thead>
               <tbody>
-                {filteredBackups.map((backup) => (
-                  <BackupRow key={backup.id} backup={backup} />
-                ))}
+                {loading ? (
+                  <tr>
+                    <td colSpan={9} className={cn('px-4 py-8 text-center', isLight ? 'text-gray-500' : 'text-gray-400')}>
+                      <RefreshCw className="w-6 h-6 mx-auto mb-2 animate-spin" />
+                      Loading backups...
+                    </td>
+                  </tr>
+                ) : error ? (
+                  <tr>
+                    <td colSpan={9} className={cn('px-4 py-8 text-center', isLight ? 'text-red-600' : 'text-red-400')}>
+                      <AlertCircle className="w-6 h-6 mx-auto mb-2" />
+                      <p className="mb-2">{error}</p>
+                      <Button size="sm" onClick={fetchData} leftIcon={<RefreshCw className="w-4 h-4" />}>
+                        Retry
+                      </Button>
+                    </td>
+                  </tr>
+                ) : filteredBackups.length === 0 ? (
+                  <tr>
+                    <td colSpan={9} className={cn('px-4 py-8 text-center', isLight ? 'text-gray-500' : 'text-gray-400')}>
+                      No backups found
+                    </td>
+                  </tr>
+                ) : (
+                  filteredBackups.map((backup) => (
+                    <BackupRow key={backup.id} backup={backup} onDelete={fetchData} />
+                  ))
+                )}
               </tbody>
             </table>
-            {filteredBackups.length === 0 && (
+            {!loading && !error && filteredBackups.length === 0 && backups.length === 0 && (
               <div className="py-12">
                 <Empty
                   icon={<FileArchive className="w-8 h-8" />}
@@ -749,79 +829,68 @@ export default function DatabaseBackups() {
         <div className="space-y-4">
           <div>
             <label className={cn('block text-sm font-medium mb-1.5', isLight ? 'text-gray-700' : 'text-gray-300')}>
-              Database Server
+              Database Server *
             </label>
-            <select className={cn(
-              'w-full px-3 py-2 rounded-lg border text-sm',
-              isLight ? 'bg-white border-gray-200 text-gray-700' : 'bg-gray-900 border-gray-700 text-gray-300'
-            )}>
-              <option>Production MySQL</option>
-              <option>Production PostgreSQL</option>
-              <option>MongoDB Cluster</option>
-              <option>Redis Cache</option>
+            <select 
+              value={formData.serverId}
+              onChange={(e) => setFormData({ ...formData, serverId: e.target.value, database: '' })}
+              className={cn(
+                'w-full px-3 py-2 rounded-lg border text-sm',
+                isLight ? 'bg-white border-gray-200 text-gray-700' : 'bg-gray-900 border-gray-700 text-gray-300'
+              )}
+            >
+              <option value="">Select a server</option>
+              {servers.map(server => (
+                <option key={server.id} value={server.id}>{server.name} ({server.type})</option>
+              ))}
             </select>
           </div>
 
           <div>
             <label className={cn('block text-sm font-medium mb-1.5', isLight ? 'text-gray-700' : 'text-gray-300')}>
-              Database
+              Database *
             </label>
-            <select className={cn(
-              'w-full px-3 py-2 rounded-lg border text-sm',
-              isLight ? 'bg-white border-gray-200 text-gray-700' : 'bg-gray-900 border-gray-700 text-gray-300'
-            )}>
-              <option>All Databases</option>
-              <option>app_production</option>
-              <option>analytics</option>
-              <option>logs</option>
-            </select>
+            <Input
+              placeholder="Enter database name or 'all' for all databases"
+              value={formData.database}
+              onChange={(e) => setFormData({ ...formData, database: e.target.value })}
+            />
+            <p className={cn('text-xs mt-1', isLight ? 'text-gray-500' : 'text-gray-400')}>
+              Enter the database name, or "all" to backup all databases on the server
+            </p>
           </div>
 
           <div>
             <label className={cn('block text-sm font-medium mb-1.5', isLight ? 'text-gray-700' : 'text-gray-300')}>
               Backup Type
             </label>
-            <select className={cn(
-              'w-full px-3 py-2 rounded-lg border text-sm',
-              isLight ? 'bg-white border-gray-200 text-gray-700' : 'bg-gray-900 border-gray-700 text-gray-300'
-            )}>
-              <option value="full">Full Backup</option>
-              <option value="incremental">Incremental</option>
-              <option value="differential">Differential</option>
+            <select 
+              value={formData.type}
+              onChange={(e) => setFormData({ ...formData, type: e.target.value as 'manual' | 'scheduled' })}
+              className={cn(
+                'w-full px-3 py-2 rounded-lg border text-sm',
+                isLight ? 'bg-white border-gray-200 text-gray-700' : 'bg-gray-900 border-gray-700 text-gray-300'
+              )}
+            >
+              <option value="manual">Manual Backup</option>
+              <option value="scheduled">Scheduled Backup</option>
             </select>
-          </div>
-
-          <div>
-            <label className={cn('block text-sm font-medium mb-1.5', isLight ? 'text-gray-700' : 'text-gray-300')}>
-              Storage Location
-            </label>
-            <select className={cn(
-              'w-full px-3 py-2 rounded-lg border text-sm',
-              isLight ? 'bg-white border-gray-200 text-gray-700' : 'bg-gray-900 border-gray-700 text-gray-300'
-            )}>
-              <option value="local">Local Storage</option>
-              <option value="s3">AWS S3</option>
-              <option value="gcs">Google Cloud Storage</option>
-            </select>
-          </div>
-
-          <div className="flex items-center gap-4">
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input type="checkbox" defaultChecked className="rounded" />
-              <span className={cn('text-sm', isLight ? 'text-gray-700' : 'text-gray-300')}>Compress</span>
-            </label>
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input type="checkbox" defaultChecked className="rounded" />
-              <span className={cn('text-sm', isLight ? 'text-gray-700' : 'text-gray-300')}>Encrypt</span>
-            </label>
           </div>
 
           <div className={cn(
             'flex justify-end gap-3 pt-4 border-t',
             isLight ? 'border-gray-200' : 'border-gray-700'
           )}>
-            <Button variant="secondary" onClick={() => setShowCreate(false)}>Cancel</Button>
-            <Button leftIcon={<Play className="w-4 h-4" />}>Start Backup</Button>
+            <Button variant="secondary" onClick={() => setShowCreate(false)} disabled={submitting}>
+              Cancel
+            </Button>
+            <Button 
+              leftIcon={<Play className="w-4 h-4" />} 
+              onClick={handleCreateBackup}
+              disabled={submitting || !formData.serverId || !formData.database}
+            >
+              {submitting ? 'Creating...' : 'Start Backup'}
+            </Button>
           </div>
         </div>
       </Modal>

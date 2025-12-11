@@ -48,9 +48,10 @@ export interface DropdownItemProps {
   children: ReactNode;
   danger?: boolean;
   disabled?: boolean;
+  className?: string;
 }
 
-export function DropdownItem({ onClick, icon, children, danger, disabled }: DropdownItemProps) {
+export function DropdownItem({ onClick, icon, children, danger, disabled, className }: DropdownItemProps) {
   return (
     <button
       onClick={onClick}
@@ -61,7 +62,8 @@ export function DropdownItem({ onClick, icon, children, danger, disabled }: Drop
         disabled && 'opacity-50 cursor-not-allowed',
         danger
           ? 'text-red-400 hover:bg-red-500/10'
-          : 'text-dark-300 hover:bg-dark-700 hover:text-dark-100'
+          : 'text-dark-300 hover:bg-dark-700 hover:text-dark-100',
+        className
       )}
     >
       {icon && <span className="w-4 h-4">{icon}</span>}

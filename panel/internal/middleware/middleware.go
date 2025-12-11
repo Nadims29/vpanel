@@ -143,33 +143,42 @@ func RateLimit(cfg config.RateLimitConfig) gin.HandlerFunc {
 // Auth returns an authentication middleware
 func Auth(authService *services.AuthService) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		var token string
+
+		// First, try to get token from Authorization header
 		authHeader := c.GetHeader("Authorization")
-		if authHeader == "" {
-			response.Unauthorized(c, "Missing authorization header")
+		if authHeader != "" {
+			// Extract token from "Bearer <token>"
+			parts := strings.SplitN(authHeader, " ", 2)
+			if len(parts) == 2 && parts[0] == "Bearer" {
+				token = parts[1]
+			}
+		}
+
+		// If no token in header, try query parameter (for WebSocket)
+		if token == "" {
+			token = c.Query("token")
+		}
+
+		// If still no token, return unauthorized
+		if token == "" {
+			response.Unauthorized(c, "Missing authorization token")
 			c.Abort()
 			return
 		}
-
-		// Extract token from "Bearer <token>"
-		parts := strings.SplitN(authHeader, " ", 2)
-		if len(parts) != 2 || parts[0] != "Bearer" {
-			response.Unauthorized(c, "Invalid authorization header format")
-			c.Abort()
-			return
-		}
-
-		token := parts[1]
 
 		// Validate token
-		userID, err := authService.ValidateToken(token)
+		claims, err := authService.ValidateToken(token)
 		if err != nil {
 			response.Unauthorized(c, "Invalid or expired token")
 			c.Abort()
 			return
 		}
 
-		// Set user ID in context
-		c.Set("user_id", userID)
+		// Set user ID and role in context
+		c.Set("user_id", claims.UserID)
+		c.Set("user_role", claims.Role)
+		c.Set("username", claims.Username)
 		c.Next()
 	}
 }
@@ -289,9 +298,20 @@ func Recovery(log *logger.Logger) gin.HandlerFunc {
 // Audit logs user actions for auditing
 func Audit(auditService *services.AuditService) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		// Skip certain paths
-		if strings.HasPrefix(c.Request.URL.Path, "/health") ||
-			strings.HasPrefix(c.Request.URL.Path, "/assets") {
+		// Skip certain paths that don't need auditing
+		path := c.Request.URL.Path
+		if strings.HasPrefix(path, "/health") ||
+			strings.HasPrefix(path, "/assets") ||
+			strings.HasPrefix(path, "/api/monitor") ||
+			strings.HasPrefix(path, "/api/dashboard") ||
+			strings.HasPrefix(path, "/api/logs/audit") {
+			c.Next()
+			return
+		}
+
+		// Skip GET requests (read-only, no audit needed for most)
+		method := c.Request.Method
+		if method == "GET" && !strings.Contains(path, "/download") {
 			c.Next()
 			return
 		}
@@ -299,12 +319,125 @@ func Audit(auditService *services.AuditService) gin.HandlerFunc {
 		c.Next()
 
 		// Log after request is processed
-		// auditService.Log(...)
+		userID, _ := c.Get("user_id")
+		username, _ := c.Get("username")
+
+		userIDStr := ""
+		if userID != nil {
+			userIDStr = userID.(string)
+		}
+		usernameStr := ""
+		if username != nil {
+			usernameStr = username.(string)
+		}
+
+		// Determine action and resource from path and method
+		action := getActionFromMethod(method)
+		resource, resourceID := getResourceFromPath(path)
+
+		// Determine status
+		status := "success"
+		if c.Writer.Status() >= 400 {
+			status = "failed"
+		}
+
+		// Build details
+		details := map[string]interface{}{
+			"method":      method,
+			"path":        path,
+			"status_code": c.Writer.Status(),
+		}
+
+		// Log the audit entry
+		auditService.Log(
+			userIDStr,
+			usernameStr,
+			action,
+			resource,
+			resourceID,
+			c.ClientIP(),
+			c.Request.UserAgent(),
+			status,
+			details,
+		)
 	}
+}
+
+// getActionFromMethod returns the action type based on HTTP method
+func getActionFromMethod(method string) string {
+	switch method {
+	case "POST":
+		return "create"
+	case "PUT", "PATCH":
+		return "update"
+	case "DELETE":
+		return "delete"
+	default:
+		return "view"
+	}
+}
+
+// getResourceFromPath extracts resource type and ID from API path
+func getResourceFromPath(path string) (string, string) {
+	// Remove /api prefix
+	path = strings.TrimPrefix(path, "/api")
+	parts := strings.Split(strings.Trim(path, "/"), "/")
+
+	if len(parts) == 0 {
+		return "unknown", ""
+	}
+
+	resource := parts[0]
+	resourceID := ""
+
+	if len(parts) > 1 {
+		// Check if second part looks like an ID (UUID or number)
+		if len(parts[1]) > 0 && (len(parts[1]) == 36 || isNumeric(parts[1])) {
+			resourceID = parts[1]
+		}
+	}
+
+	// Map common paths to resource names
+	resourceMap := map[string]string{
+		"auth":       "auth",
+		"docker":     "container",
+		"containers": "container",
+		"images":     "image",
+		"networks":   "network",
+		"volumes":    "volume",
+		"compose":    "compose",
+		"nginx":      "site",
+		"sites":      "site",
+		"certs":      "certificate",
+		"database":   "database",
+		"files":      "file",
+		"terminal":   "terminal",
+		"cron":       "cron",
+		"firewall":   "firewall",
+		"plugins":    "plugin",
+		"settings":   "settings",
+		"users":      "user",
+		"nodes":      "node",
+	}
+
+	if mapped, ok := resourceMap[resource]; ok {
+		resource = mapped
+	}
+
+	return resource, resourceID
+}
+
+// isNumeric checks if a string contains only numeric characters
+func isNumeric(s string) bool {
+	for _, c := range s {
+		if c < '0' || c > '9' {
+			return false
+		}
+	}
+	return len(s) > 0
 }
 
 func generateRequestID() string {
 	// Simple implementation - should use UUID in production
 	return time.Now().Format("20060102150405.000000")
 }
-

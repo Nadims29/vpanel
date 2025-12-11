@@ -1,5 +1,10 @@
 # VPanel - Enterprise Server Management Panel
 
+<div align="center">
+  <h1>🚀 VPanel</h1>
+  <p><strong>Next-Generation Intelligent Server Operations Management Platform</strong></p>
+</div>
+
 ```
 ██╗   ██╗██████╗  █████╗ ███╗   ██╗███████╗██╗     
 ██║   ██║██╔══██╗██╔══██╗████╗  ██║██╔════╝██║     
@@ -8,12 +13,6 @@
  ╚████╔╝ ██║     ██║  ██║██║ ╚████║███████╗███████╗
   ╚═══╝  ╚═╝     ╚═╝  ╚═╝╚═╝  ╚═══╝╚══════╝╚══════╝
 ```
-
-<div align="center">
-  <h1>🚀 VPanel</h1>
-  <p><strong>Next-Generation Intelligent Server Operations Management Platform</strong></p>
-</div>
-
 
 ## ✨ Core Features
 
@@ -159,6 +158,28 @@ func main() {
 Apache License 2.0
 
 
+## ⭐ Star History
+
+<div align="center">
+  <p>
+    <a href="https://github.com/zsai001/vpanel/stargazers">
+      <img src="https://img.shields.io/github/stars/zsai001/vpanel?style=social" alt="GitHub stars">
+    </a>
+    <a href="https://github.com/zsai001/vpanel/forks">
+      <img src="https://img.shields.io/github/forks/zsai001/vpanel?style=social" alt="GitHub forks">
+    </a>
+  </p>
+  
+  <p>
+    <a href="https://star-history.com/#zsai001/vpanel&Date">
+      <picture>
+        <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=zsai001/vpanel&type=Date&theme=dark" />
+        <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=zsai001/vpanel&type=Date" />
+        <img src="https://api.star-history.com/svg?repos=zsai001/vpanel&type=Date" alt="Star History Chart" />
+      </picture>
+    </a>
+  </p>
+</div>
 
 <div align="center">
   <p>Made with ❤️ by VPanel Team</p>

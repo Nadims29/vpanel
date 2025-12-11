@@ -97,3 +97,130 @@ export async function getContainerLogs(
 export async function getContainerStats(id: string): Promise<ContainerStats> {
   return get<ContainerStats>(`/docker/containers/${id}/stats`);
 }
+
+// Image interfaces
+export interface Image {
+  id: string;
+  tags: string[];
+  size: number;
+  created: string;
+}
+
+export interface PullImageRequest {
+  image: string;
+}
+
+// List all images
+export async function listImages(): Promise<Image[]> {
+  return get<Image[]>('/docker/images');
+}
+
+// Pull an image
+export async function pullImage(image: string): Promise<void> {
+  return post<void>('/docker/images/pull', { image });
+}
+
+// Remove an image
+export async function removeImage(id: string, force = false): Promise<void> {
+  return del<void>(`/docker/images/${id}?force=${force}`);
+}
+
+// Network interfaces
+export interface Network {
+  id: string;
+  name: string;
+  driver: string;
+  scope: string;
+  created: string;
+}
+
+export interface CreateNetworkRequest {
+  name: string;
+  driver?: string;
+}
+
+// List all networks
+export async function listNetworks(): Promise<Network[]> {
+  return get<Network[]>('/docker/networks');
+}
+
+// Create a network
+export async function createNetwork(data: CreateNetworkRequest): Promise<Network> {
+  return post<Network>('/docker/networks', data);
+}
+
+// Remove a network
+export async function removeNetwork(id: string): Promise<void> {
+  return del<void>(`/docker/networks/${id}`);
+}
+
+// Volume interfaces
+export interface Volume {
+  name: string;
+  driver: string;
+  mountpoint: string;
+  created: string;
+}
+
+export interface CreateVolumeRequest {
+  name: string;
+  driver?: string;
+}
+
+// List all volumes
+export async function listVolumes(): Promise<Volume[]> {
+  return get<Volume[]>('/docker/volumes');
+}
+
+// Create a volume
+export async function createVolume(data: CreateVolumeRequest): Promise<Volume> {
+  return post<Volume>('/docker/volumes', data);
+}
+
+// Remove a volume
+export async function removeVolume(name: string, force = false): Promise<void> {
+  return del<void>(`/docker/volumes/${name}?force=${force}`);
+}
+
+// Compose interfaces
+export interface ComposeProject {
+  id: string;
+  name: string;
+  path: string;
+  status: 'running' | 'stopped' | 'partial' | 'unknown';
+  description: string;
+  created: string;
+  updated: string;
+}
+
+export interface CreateComposeProjectRequest {
+  name: string;
+  path: string;
+  content: string;
+  description?: string;
+}
+
+// List all compose projects
+export async function listComposeProjects(): Promise<ComposeProject[]> {
+  return get<ComposeProject[]>('/docker/compose');
+}
+
+// Create a compose project
+export async function createComposeProject(data: CreateComposeProjectRequest): Promise<ComposeProject> {
+  return post<ComposeProject>('/docker/compose', data);
+}
+
+// Remove a compose project
+export async function removeComposeProject(id: string): Promise<void> {
+  return del<void>(`/docker/compose/${id}`);
+}
+
+// Start compose project
+export async function composeUp(id: string): Promise<void> {
+  return post<void>(`/docker/compose/${id}/up`);
+}
+
+// Stop compose project
+export async function composeDown(id: string): Promise<void> {
+  return post<void>(`/docker/compose/${id}/down`);
+}

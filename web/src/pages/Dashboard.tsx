@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -14,14 +14,11 @@ import {
   ArrowDownRight,
   AlertTriangle,
   CheckCircle,
-  Clock,
   Zap,
   TrendingUp,
-  ExternalLink,
+  RefreshCw,
 } from 'lucide-react';
 import {
-  LineChart,
-  Line,
   AreaChart,
   Area,
   XAxis,
@@ -33,46 +30,11 @@ import {
   Pie,
   Cell,
 } from 'recharts';
-import { Card, CardHeader, CardContent, Badge, Progress, Button } from '@/components/ui';
-import { useThemeStore } from '@/stores/theme';
+import { Card, CardHeader, CardContent, Badge, Button, Spinner } from '@/components/ui';
 import { cn } from '@/utils/cn';
-
-// Mock chart data
-const cpuHistory = [
-  { time: '00:00', value: 35 },
-  { time: '04:00', value: 28 },
-  { time: '08:00', value: 45 },
-  { time: '12:00', value: 65 },
-  { time: '16:00', value: 52 },
-  { time: '20:00', value: 48 },
-  { time: '24:00', value: 42 },
-];
-
-const memoryHistory = [
-  { time: '00:00', value: 55 },
-  { time: '04:00', value: 52 },
-  { time: '08:00', value: 58 },
-  { time: '12:00', value: 72 },
-  { time: '16:00', value: 68 },
-  { time: '20:00', value: 62 },
-  { time: '24:00', value: 58 },
-];
-
-const networkHistory = [
-  { time: '00:00', rx: 120, tx: 80 },
-  { time: '04:00', rx: 85, tx: 65 },
-  { time: '08:00', rx: 180, tx: 120 },
-  { time: '12:00', rx: 250, tx: 180 },
-  { time: '16:00', rx: 220, tx: 150 },
-  { time: '20:00', rx: 190, tx: 130 },
-  { time: '24:00', rx: 150, tx: 100 },
-];
-
-const containerStats = [
-  { name: 'Running', value: 18, color: '#22c55e' },
-  { name: 'Stopped', value: 4, color: '#64748b' },
-  { name: 'Paused', value: 2, color: '#eab308' },
-];
+import toast from 'react-hot-toast';
+import * as dashboardApi from '@/api/dashboard';
+import type { DashboardOverview, SystemMetrics } from '@/api/dashboard';
 
 // Stat card component
 function StatCard({
@@ -85,6 +47,7 @@ function StatCard({
   color = 'primary',
   delay = 0,
   href,
+  loading = false,
 }: {
   title: string;
   value: string | number;
@@ -95,6 +58,7 @@ function StatCard({
   color?: 'primary' | 'green' | 'yellow' | 'red' | 'blue' | 'purple';
   delay?: number;
   href?: string;
+  loading?: boolean;
 }) {
   const navigate = useNavigate();
   const colorClasses = {
@@ -135,9 +99,17 @@ function StatCard({
           </div>
         )}
       </div>
-      <h3 className="text-3xl font-bold text-dark-100 mb-1">{value}</h3>
-      <p className="text-dark-400">{title}</p>
-      {subtitle && <p className="text-sm text-dark-500 mt-1">{subtitle}</p>}
+      {loading ? (
+        <div className="h-12 flex items-center">
+          <Spinner size="sm" />
+        </div>
+      ) : (
+        <>
+          <h3 className="text-3xl font-bold text-dark-100 mb-1">{value}</h3>
+          <p className="text-dark-400">{title}</p>
+          {subtitle && <p className="text-sm text-dark-500 mt-1">{subtitle}</p>}
+        </>
+      )}
     </motion.div>
   );
 }
@@ -158,9 +130,23 @@ function ResourceGauge({
   icon: React.ElementType;
   color: string;
 }) {
-  const percentage = (value / total) * 100;
+  const percentage = total > 0 ? (value / total) * 100 : 0;
   const circumference = 2 * Math.PI * 45;
   const strokeDashoffset = circumference - (percentage / 100) * circumference;
+
+  const formatValue = (val: number) => {
+    if (unit === 'GB' || unit === 'MB') {
+      return (val / (1024 * 1024 * 1024)).toFixed(1);
+    }
+    return val.toFixed(1);
+  };
+
+  const formatTotal = (val: number) => {
+    if (unit === 'GB' || unit === 'MB') {
+      return (val / (1024 * 1024 * 1024)).toFixed(0);
+    }
+    return val.toFixed(0);
+  };
 
   return (
     <div className="flex flex-col items-center">
@@ -194,7 +180,7 @@ function ResourceGauge({
         </div>
       </div>
       <p className="mt-2 text-sm text-dark-400">{title}</p>
-      <p className="text-xs text-dark-500">{value.toFixed(1)} / {total} {unit}</p>
+      <p className="text-xs text-dark-500">{formatValue(value)} / {formatTotal(total)} {unit}</p>
     </div>
   );
 }
@@ -266,16 +252,87 @@ function QuickAction({
 
 export default function Dashboard() {
   const [timeRange, setTimeRange] = useState('24h');
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [overview, setOverview] = useState<DashboardOverview | null>(null);
+  const [metrics, setMetrics] = useState<SystemMetrics | null>(null);
+  const [metricsHistory, setMetricsHistory] = useState<{ time: string; cpu: number; memory: number }[]>([]);
+
+  const fetchData = useCallback(async () => {
+    try {
+      const [overviewData, metricsData] = await Promise.all([
+        dashboardApi.getDashboardOverview(),
+        dashboardApi.getSystemMetrics(),
+      ]);
+      
+      setOverview(overviewData);
+      setMetrics(metricsData);
+
+      // Add to history
+      const now = new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+      setMetricsHistory(prev => {
+        const newHistory = [...prev, {
+          time: now,
+          cpu: metricsData.cpu.usage_percent,
+          memory: metricsData.memory.used_percent,
+        }];
+        // Keep last 12 data points
+        return newHistory.slice(-12);
+      });
+    } catch (error) {
+      console.error('Failed to fetch dashboard data:', error);
+      if (!loading) {
+        toast.error('Failed to refresh dashboard data');
+      }
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, [loading]);
+
+  useEffect(() => {
+    fetchData();
+    // Auto-refresh every 10 seconds
+    const interval = setInterval(fetchData, 10000);
+    return () => clearInterval(interval);
+  }, [fetchData]);
+
+  const handleRefresh = () => {
+    setRefreshing(true);
+    fetchData();
+  };
+
+  // Container stats for pie chart
+  const containerStats = [
+    { name: 'Running', value: overview?.running || 0, color: '#22c55e' },
+    { name: 'Stopped', value: Math.max(0, (overview?.containers || 0) - (overview?.running || 0)), color: '#64748b' },
+  ];
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Spinner size="lg" />
+      </div>
+    );
+  }
 
   return (
-    <div>
+    <div className="w-full">
       {/* Page header */}
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-semibold text-dark-100">Dashboard</h1>
-          <p className="text-dark-400">Overview of your server infrastructure</p>
+          <p className="text-dark-400">Overview of your server</p>
         </div>
         <div className="flex items-center gap-2">
+          <Button
+            variant="ghost"
+            leftIcon={<RefreshCw className={cn('w-4 h-4', refreshing && 'animate-spin')} />}
+            onClick={handleRefresh}
+            disabled={refreshing}
+          >
+            Refresh
+          </Button>
           <select
             value={timeRange}
             onChange={(e) => setTimeRange(e.target.value)}
@@ -290,43 +347,34 @@ export default function Dashboard() {
       </div>
 
       {/* Stats grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-        <StatCard
-          title="Total Nodes"
-          value={5}
-          subtitle="3 online, 2 offline"
-          icon={Server}
-          color="primary"
-          delay={0}
-          href="/nodes"
-        />
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
         <StatCard
           title="Containers"
-          value={24}
-          subtitle="18 running"
+          value={overview?.containers || 0}
+          subtitle={`${overview?.running || 0} running`}
           icon={Container}
           trend="up"
-          trendValue="+3"
+          trendValue={`+${overview?.running || 0}`}
           color="blue"
-          delay={0.1}
+          delay={0}
           href="/docker/containers"
         />
         <StatCard
           title="Websites"
-          value={12}
-          subtitle="All healthy"
+          value={overview?.sites || 0}
+          subtitle="Nginx sites"
           icon={Globe}
           color="green"
-          delay={0.2}
+          delay={0.1}
           href="/nginx/sites"
         />
         <StatCard
           title="Databases"
-          value={8}
-          subtitle="MySQL, PostgreSQL, Redis"
+          value={overview?.databases || 0}
+          subtitle="Database servers"
           icon={Database}
           color="purple"
-          delay={0.3}
+          delay={0.2}
           href="/database/servers"
         />
       </div>
@@ -349,17 +397,17 @@ export default function Dashboard() {
               <div className="flex items-center gap-4 text-sm">
                 <span className="flex items-center gap-2">
                   <span className="w-3 h-3 rounded-full bg-primary-500" />
-                  CPU
+                  CPU: {metrics?.cpu.usage_percent.toFixed(1)}%
                 </span>
                 <span className="flex items-center gap-2">
                   <span className="w-3 h-3 rounded-full bg-purple-500" />
-                  Memory
+                  Memory: {metrics?.memory.used_percent.toFixed(1)}%
                 </span>
               </div>
             </CardHeader>
             <CardContent className="h-64">
               <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={cpuHistory}>
+                <AreaChart data={metricsHistory.length > 0 ? metricsHistory : [{ time: 'Now', cpu: 0, memory: 0 }]}>
                   <defs>
                     <linearGradient id="cpuGradient" x1="0" y1="0" x2="0" y2="1">
                       <stop offset="0%" stopColor="#06b6d4" stopOpacity={0.3} />
@@ -382,20 +430,19 @@ export default function Dashboard() {
                   />
                   <Area
                     type="monotone"
-                    dataKey="value"
+                    dataKey="cpu"
                     stroke="#06b6d4"
                     fill="url(#cpuGradient)"
                     strokeWidth={2}
-                    name="CPU"
+                    name="CPU %"
                   />
                   <Area
                     type="monotone"
-                    data={memoryHistory}
-                    dataKey="value"
+                    dataKey="memory"
                     stroke="#8b5cf6"
                     fill="url(#memGradient)"
                     strokeWidth={2}
-                    name="Memory"
+                    name="Memory %"
                   />
                 </AreaChart>
               </ResponsiveContainer>
@@ -412,13 +459,21 @@ export default function Dashboard() {
           <Card>
             <CardHeader>
               <h2 className="font-semibold text-dark-100">Resource Usage</h2>
-              <Badge variant="success">Healthy</Badge>
+              <Badge variant={
+                metrics && metrics.cpu.usage_percent < 70 && metrics.memory.used_percent < 80 
+                  ? 'success' 
+                  : 'warning'
+              }>
+                {metrics && metrics.cpu.usage_percent < 70 && metrics.memory.used_percent < 80 
+                  ? 'Healthy' 
+                  : 'High Usage'}
+              </Badge>
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-3 gap-4">
                 <ResourceGauge
                   title="CPU"
-                  value={45.2}
+                  value={metrics?.cpu.usage_percent || 0}
                   total={100}
                   unit="%"
                   icon={Cpu}
@@ -426,16 +481,16 @@ export default function Dashboard() {
                 />
                 <ResourceGauge
                   title="Memory"
-                  value={12.4}
-                  total={32}
+                  value={metrics?.memory.used || 0}
+                  total={metrics?.memory.total || 1}
                   unit="GB"
                   icon={MemoryStick}
                   color="#8b5cf6"
                 />
                 <ResourceGauge
                   title="Disk"
-                  value={234}
-                  total={500}
+                  value={metrics?.disk.used || 0}
+                  total={metrics?.disk.total || 1}
                   unit="GB"
                   icon={HardDrive}
                   color="#22c55e"
@@ -464,41 +519,21 @@ export default function Dashboard() {
               <div className="flex items-center gap-4 text-sm">
                 <span className="flex items-center gap-2">
                   <span className="w-3 h-3 rounded-full bg-green-500" />
-                  Download
+                  Received: {formatBytes(metrics?.network.bytes_recv || 0)}
                 </span>
                 <span className="flex items-center gap-2">
                   <span className="w-3 h-3 rounded-full bg-blue-500" />
-                  Upload
+                  Sent: {formatBytes(metrics?.network.bytes_sent || 0)}
                 </span>
               </div>
             </CardHeader>
             <CardContent className="h-48">
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={networkHistory}>
-                  <defs>
-                    <linearGradient id="rxGradient" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="#22c55e" stopOpacity={0.3} />
-                      <stop offset="100%" stopColor="#22c55e" stopOpacity={0} />
-                    </linearGradient>
-                    <linearGradient id="txGradient" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="#3b82f6" stopOpacity={0.3} />
-                      <stop offset="100%" stopColor="#3b82f6" stopOpacity={0} />
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
-                  <XAxis dataKey="time" stroke="#64748b" fontSize={12} />
-                  <YAxis stroke="#64748b" fontSize={12} />
-                  <Tooltip
-                    contentStyle={{
-                      backgroundColor: '#1e293b',
-                      border: '1px solid #334155',
-                      borderRadius: '8px',
-                    }}
-                  />
-                  <Area type="monotone" dataKey="rx" stroke="#22c55e" fill="url(#rxGradient)" strokeWidth={2} name="Download" />
-                  <Area type="monotone" dataKey="tx" stroke="#3b82f6" fill="url(#txGradient)" strokeWidth={2} name="Upload" />
-                </AreaChart>
-              </ResponsiveContainer>
+              <div className="flex items-center justify-center h-full text-dark-500">
+                <div className="text-center">
+                  <Activity className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                  <p>Network: {formatBytes(metrics?.network.bytes_recv || 0)} ↓ / {formatBytes(metrics?.network.bytes_sent || 0)} ↑</p>
+                </div>
+              </div>
             </CardContent>
           </Card>
         </motion.div>
@@ -512,7 +547,7 @@ export default function Dashboard() {
           <Card>
             <CardHeader>
               <h2 className="font-semibold text-dark-100">Containers</h2>
-              <span className="text-sm text-dark-400">24 total</span>
+              <span className="text-sm text-dark-400">{overview?.containers || 0} total</span>
             </CardHeader>
             <CardContent>
               <div className="h-36 flex items-center justify-center">
@@ -563,39 +598,32 @@ export default function Dashboard() {
                 <AlertTriangle className="w-5 h-5 text-yellow-400" />
                 <h2 className="font-semibold text-dark-100">Recent Alerts</h2>
               </div>
-              <Badge variant="danger">2 critical</Badge>
+              <Badge variant={overview?.alerts && overview.alerts > 0 ? 'danger' : 'success'}>
+                {overview?.alerts || 0} active
+              </Badge>
             </CardHeader>
             <CardContent className="p-2">
-              <AlertItem
-                severity="critical"
-                title="High CPU usage (95%)"
-                time="5 minutes ago"
-                node="prod-01"
-              />
-              <AlertItem
-                severity="critical"
-                title="Disk space low (92%)"
-                time="15 minutes ago"
-                node="db-01"
-              />
-              <AlertItem
-                severity="warning"
-                title="Memory usage high (78%)"
-                time="1 hour ago"
-                node="prod-02"
-              />
-              <AlertItem
-                severity="info"
-                title="SSL certificate renewed"
-                time="2 hours ago"
-                node="prod-01"
-              />
-              <AlertItem
-                severity="info"
-                title="Backup completed successfully"
-                time="3 hours ago"
-                node="backup-01"
-              />
+              {overview?.alerts && overview.alerts > 0 ? (
+                <>
+                  <AlertItem
+                    severity="warning"
+                    title="System monitoring active"
+                    time="Just now"
+                  />
+                  <AlertItem
+                    severity="info"
+                    title="Dashboard loaded successfully"
+                    time="Just now"
+                  />
+                </>
+              ) : (
+                <div className="flex items-center justify-center py-8 text-dark-500">
+                  <div className="text-center">
+                    <CheckCircle className="w-8 h-8 mx-auto mb-2 text-green-500" />
+                    <p>No active alerts</p>
+                  </div>
+                </div>
+              )}
             </CardContent>
           </Card>
         </motion.div>
@@ -632,10 +660,10 @@ export default function Dashboard() {
                   href="/database/servers"
                 />
                 <QuickAction
-                  icon={Server}
-                  title="Add Node"
-                  description="Connect new server"
-                  href="/nodes"
+                  icon={Activity}
+                  title="System Monitor"
+                  description="View system metrics"
+                  href="/monitor"
                 />
               </div>
             </CardContent>
@@ -644,4 +672,13 @@ export default function Dashboard() {
       </div>
     </div>
   );
+}
+
+// Helper function to format bytes
+function formatBytes(bytes: number): string {
+  if (bytes === 0) return '0 B';
+  const k = 1024;
+  const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
 }

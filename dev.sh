@@ -58,20 +58,39 @@ build_all() {
     build_web
 }
 
+# 清理端口占用
+cleanup_port() {
+    local port=$1
+    if [ -z "$port" ]; then
+        port=8080
+    fi
+    
+    local pids=$(lsof -ti:$port 2>/dev/null)
+    if [ -n "$pids" ]; then
+        log_info "Killing processes on port $port..."
+        echo "$pids" | xargs kill -9 2>/dev/null
+        sleep 1
+    fi
+}
+
 # 开发模式 - 启动 server
 dev_server() {
+    cleanup_port 8080
     log_info "Starting server in development mode..."
     cd panel && go run ./cmd/server
 }
 
 # 开发模式 - 启动 web
 dev_web() {
+    cleanup_port 3000
     log_info "Starting web frontend in development mode..."
     cd web && npm run dev
 }
 
 # 开发模式 - 同时启动 server 和 web
 dev() {
+    cleanup_port 8080
+    cleanup_port 3000
     log_info "Starting development servers..."
     # 启动 server 在后台
     (cd panel && go run ./cmd/server) &
@@ -82,7 +101,7 @@ dev() {
     WEB_PID=$!
     
     # 捕获 SIGINT/SIGTERM 信号，清理子进程
-    trap "kill $SERVER_PID $WEB_PID 2>/dev/null; exit" SIGINT SIGTERM
+    trap "kill $SERVER_PID $WEB_PID 2>/dev/null; cleanup_port 8080; cleanup_port 3000; exit" SIGINT SIGTERM
     
     wait
 }

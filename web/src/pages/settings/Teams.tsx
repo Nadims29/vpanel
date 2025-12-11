@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import {
   Plus,
@@ -17,6 +17,8 @@ import {
   Database,
   Globe,
   Cloud,
+  Loader2,
+  AlertCircle,
 } from 'lucide-react';
 import {
   Button,
@@ -36,99 +38,20 @@ import {
 } from '@/components/ui';
 import { cn } from '@/utils/cn';
 import { useThemeStore } from '@/stores/theme';
+import * as teamsApi from '@/api/teams';
+import type { Team, TeamMember } from '@/api/teams';
 
-interface TeamMember {
-  id: string;
-  name: string;
-  email: string;
-  role: string;
-  avatar?: string;
-}
+// Types are imported from API
 
-interface Team {
-  id: string;
-  name: string;
-  description: string;
-  icon: string;
-  color: string;
-  members: TeamMember[];
-  resources: string[];
-  createdAt: string;
-  createdBy: string;
-}
-
-const mockTeams: Team[] = [
-  {
-    id: '1',
-    name: 'Platform Team',
-    description: 'Core platform infrastructure and operations',
-    icon: '🚀',
-    color: 'bg-blue-500',
-    members: [
-      { id: '1', name: 'Administrator', email: 'admin@example.com', role: 'Owner' },
-      { id: '2', name: 'John Smith', email: 'john.smith@example.com', role: 'Admin' },
-    ],
-    resources: ['All Servers', 'All Containers', 'All Databases'],
-    createdAt: '2024-01-15',
-    createdBy: 'System',
-  },
-  {
-    id: '2',
-    name: 'DevOps',
-    description: 'DevOps and CI/CD automation team',
-    icon: '⚙️',
-    color: 'bg-purple-500',
-    members: [
-      { id: '2', name: 'John Smith', email: 'john.smith@example.com', role: 'Owner' },
-      { id: '3', name: 'Sarah Johnson', email: 'sarah.j@example.com', role: 'Member' },
-      { id: '5', name: 'Emily Davis', email: 'emily.d@example.com', role: 'Member' },
-    ],
-    resources: ['Production Cluster', 'Staging Cluster', 'CI/CD Pipelines'],
-    createdAt: '2024-03-01',
-    createdBy: 'Administrator',
-  },
-  {
-    id: '3',
-    name: 'Development',
-    description: 'Application development and feature teams',
-    icon: '💻',
-    color: 'bg-green-500',
-    members: [
-      { id: '3', name: 'Sarah Johnson', email: 'sarah.j@example.com', role: 'Owner' },
-    ],
-    resources: ['Dev Environment', 'Dev Databases'],
-    createdAt: '2024-04-10',
-    createdBy: 'John Smith',
-  },
-  {
-    id: '4',
-    name: 'QA Team',
-    description: 'Quality assurance and testing',
-    icon: '🧪',
-    color: 'bg-amber-500',
-    members: [
-      { id: '4', name: 'Mike Chen', email: 'mike.chen@example.com', role: 'Owner' },
-    ],
-    resources: ['Staging Environment', 'Test Databases'],
-    createdAt: '2024-05-20',
-    createdBy: 'John Smith',
-  },
-  {
-    id: '5',
-    name: 'Database Admins',
-    description: 'Database administration and optimization',
-    icon: '🗄️',
-    color: 'bg-red-500',
-    members: [
-      { id: '2', name: 'John Smith', email: 'john.smith@example.com', role: 'Owner' },
-    ],
-    resources: ['All Databases', 'Backup Systems'],
-    createdAt: '2024-06-01',
-    createdBy: 'Administrator',
-  },
-];
-
-function TeamCard({ team, onEdit }: { team: Team; onEdit: () => void }) {
+function TeamCard({ 
+  team, 
+  onEdit, 
+  onDelete 
+}: { 
+  team: Team; 
+  onEdit: () => void;
+  onDelete: () => void;
+}) {
   const [showDelete, setShowDelete] = useState(false);
   const resolvedMode = useThemeStore((state) => state.resolvedMode);
   const isLight = resolvedMode === 'light';
@@ -212,14 +135,17 @@ function TeamCard({ team, onEdit }: { team: Team; onEdit: () => void }) {
           'px-5 py-3 border-t text-xs',
           isLight ? 'border-gray-100 text-gray-500' : 'border-gray-700 text-gray-500'
         )}>
-          Created {team.createdAt} by {team.createdBy}
+          Created {new Date(team.createdAt).toLocaleDateString()} by {team.createdBy}
         </div>
       </motion.div>
 
       <ConfirmModal
         open={showDelete}
         onClose={() => setShowDelete(false)}
-        onConfirm={() => setShowDelete(false)}
+        onConfirm={() => {
+          setShowDelete(false);
+          onDelete();
+        }}
         type="danger"
         title="Delete Team"
         message={`Are you sure you want to delete "${team.name}"? This will remove all team associations.`}
@@ -229,21 +155,63 @@ function TeamCard({ team, onEdit }: { team: Team; onEdit: () => void }) {
   );
 }
 
-function TeamDetail({ team, onClose }: { team: Team; onClose: () => void }) {
+function TeamDetail({ 
+  team, 
+  onClose,
+  onSave,
+  onAddMember,
+  onRemoveMember,
+  onUpdateMemberRole
+}: { 
+  team: Team; 
+  onClose: () => void;
+  onSave?: (data: { name: string; description: string; icon: string; color: string }) => void;
+  onAddMember?: (userId: string, role: 'Owner' | 'Admin' | 'Member') => void;
+  onRemoveMember?: (userId: string) => void;
+  onUpdateMemberRole?: (userId: string, role: 'Owner' | 'Admin' | 'Member') => void;
+}) {
   const [activeTab, setActiveTab] = useState<'members' | 'resources' | 'settings'>('members');
+  const [name, setName] = useState(team.name);
+  const [description, setDescription] = useState(team.description);
+  const [icon, setIcon] = useState(team.icon);
+  const [color, setColor] = useState(team.color);
+  const [saving, setSaving] = useState(false);
   const resolvedMode = useThemeStore((state) => state.resolvedMode);
   const isLight = resolvedMode === 'light';
+
+  const handleSave = async () => {
+    if (!onSave) return;
+    try {
+      setSaving(true);
+      await onSave({ name, description, icon, color });
+      onClose();
+    } catch (error) {
+      console.error('Failed to save team:', error);
+    } finally {
+      setSaving(false);
+    }
+  };
 
   return (
     <div className="space-y-6">
       {/* Team Header */}
       <div className="flex items-center gap-4">
-        <div className={cn('w-16 h-16 rounded-xl flex items-center justify-center text-3xl', team.color + '/20')}>
-          {team.icon}
+        <div className={cn('w-16 h-16 rounded-xl flex items-center justify-center text-3xl', color + '/20')}>
+          {icon}
         </div>
         <div className="flex-1">
-          <Input defaultValue={team.name} className="text-lg font-semibold mb-1" />
-          <Input defaultValue={team.description} className="text-sm" />
+          <Input 
+            value={name} 
+            onChange={(e) => setName(e.target.value)}
+            className="text-lg font-semibold mb-1" 
+            disabled={saving}
+          />
+          <Input 
+            value={description} 
+            onChange={(e) => setDescription(e.target.value)}
+            className="text-sm" 
+            disabled={saving}
+          />
         </div>
       </div>
 
@@ -295,10 +263,25 @@ function TeamDetail({ team, onClose }: { team: Team; onClose: () => void }) {
                       </button>
                     }
                   >
-                    <DropdownItem icon={<Shield className="w-4 h-4" />}>Change Role</DropdownItem>
+                    <DropdownItem 
+                      icon={<Shield className="w-4 h-4" />}
+                      onClick={() => {
+                        // TODO: Show role change modal
+                        const newRole = member.role === 'Owner' ? 'Admin' : member.role === 'Admin' ? 'Member' : 'Owner';
+                        onUpdateMemberRole?.(member.id, newRole);
+                      }}
+                    >
+                      Change Role
+                    </DropdownItem>
                     <DropdownItem icon={<Mail className="w-4 h-4" />}>Send Message</DropdownItem>
                     <DropdownDivider />
-                    <DropdownItem icon={<UserMinus className="w-4 h-4" />} danger>Remove</DropdownItem>
+                    <DropdownItem 
+                      icon={<UserMinus className="w-4 h-4" />} 
+                      danger
+                      onClick={() => onRemoveMember?.(member.id)}
+                    >
+                      Remove
+                    </DropdownItem>
                   </Dropdown>
                 </div>
               </div>
@@ -351,10 +334,11 @@ function TeamDetail({ team, onClose }: { team: Team; onClose: () => void }) {
                   key={emoji}
                   className={cn(
                     'w-10 h-10 rounded-lg flex items-center justify-center text-xl transition-all',
-                    team.icon === emoji
+                    icon === emoji
                       ? 'bg-blue-500/20 ring-2 ring-blue-500'
                       : isLight ? 'bg-gray-100 hover:bg-gray-200' : 'bg-gray-800 hover:bg-gray-700'
                   )}
+                  onClick={() => setIcon(emoji)}
                 >
                   {emoji}
                 </button>
@@ -371,10 +355,11 @@ function TeamDetail({ team, onClose }: { team: Team; onClose: () => void }) {
                 <button
                   key={color}
                   className={cn(
-                    'w-8 h-8 rounded-full transition-all',
+                    'w-8 h-8 rounded-full transition-all cursor-pointer',
                     color,
                     team.color === color && 'ring-2 ring-offset-2 ring-gray-500'
                   )}
+                  onClick={() => setColor(color)}
                 />
               ))}
             </div>
@@ -404,26 +389,174 @@ function TeamDetail({ team, onClose }: { team: Team; onClose: () => void }) {
         'flex justify-end gap-3 pt-4 border-t',
         isLight ? 'border-gray-200' : 'border-gray-700'
       )}>
-        <Button variant="secondary" onClick={onClose}>Cancel</Button>
-        <Button>Save Changes</Button>
+        <Button variant="secondary" onClick={onClose} disabled={saving}>Cancel</Button>
+        <Button onClick={handleSave} disabled={saving || !name.trim()}>
+          {saving ? (
+            <>
+              <Loader2 className="w-4 h-4 animate-spin mr-2" />
+              Saving...
+            </>
+          ) : (
+            'Save Changes'
+          )}
+        </Button>
       </div>
     </div>
   );
 }
 
 export default function TeamsPage() {
+  const [teams, setTeams] = useState<Team[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [showCreate, setShowCreate] = useState(false);
   const [selectedTeam, setSelectedTeam] = useState<Team | null>(null);
+  const [createForm, setCreateForm] = useState({
+    name: '',
+    description: '',
+    icon: '🚀',
+    color: 'bg-blue-500',
+  });
+  const [submitting, setSubmitting] = useState(false);
   const resolvedMode = useThemeStore((state) => state.resolvedMode);
   const isLight = resolvedMode === 'light';
 
-  const filteredTeams = mockTeams.filter((t) =>
+  // Load teams
+  useEffect(() => {
+    loadTeams();
+  }, []);
+
+  async function loadTeams() {
+    try {
+      setLoading(true);
+      setError(null);
+      const data = await teamsApi.listTeams();
+      setTeams(data);
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to load teams';
+      setError(errorMessage);
+      console.error('Failed to load teams:', err);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  const filteredTeams = teams.filter((t) =>
     t.name.toLowerCase().includes(search.toLowerCase()) ||
     t.description.toLowerCase().includes(search.toLowerCase())
   );
 
-  const totalMembers = mockTeams.reduce((acc, team) => acc + team.members.length, 0);
+  const totalMembers = teams.reduce((acc, team) => acc + team.members.length, 0);
+
+  // Handle create team
+  async function handleCreateTeam() {
+    try {
+      setSubmitting(true);
+      setError(null);
+      await teamsApi.createTeam(createForm);
+      setShowCreate(false);
+      setCreateForm({ name: '', description: '', icon: '🚀', color: 'bg-blue-500' });
+      await loadTeams();
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to create team';
+      setError(errorMessage);
+      if (!errorMessage.includes('not yet supported')) {
+        console.error('Failed to create team:', err);
+      }
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  // Handle update team
+  async function handleUpdateTeam(data: { name: string; description: string; icon: string; color: string }) {
+    if (!selectedTeam) return;
+    try {
+      setError(null);
+      await teamsApi.updateTeam(selectedTeam.id, data);
+      await loadTeams();
+      setSelectedTeam(null);
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to update team';
+      setError(errorMessage);
+      if (!errorMessage.includes('not yet supported')) {
+        throw err;
+      }
+    }
+  }
+
+  // Handle delete team
+  async function handleDeleteTeam(team: Team) {
+    try {
+      setError(null);
+      await teamsApi.deleteTeam(team.id);
+      await loadTeams();
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to delete team';
+      setError(errorMessage);
+      if (!errorMessage.includes('not yet supported')) {
+        console.error('Failed to delete team:', err);
+      }
+    }
+  }
+
+  // Handle add member
+  async function handleAddMember(userId: string, role: 'Owner' | 'Admin' | 'Member' = 'Member') {
+    if (!selectedTeam) return;
+    try {
+      setError(null);
+      await teamsApi.addTeamMember(selectedTeam.id, { userId, role });
+      await loadTeams();
+      // Refresh selected team
+      const updatedTeam = await teamsApi.getTeam(selectedTeam.id);
+      setSelectedTeam(updatedTeam);
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to add member';
+      setError(errorMessage);
+      if (!errorMessage.includes('not yet supported')) {
+        console.error('Failed to add member:', err);
+      }
+    }
+  }
+
+  // Handle remove member
+  async function handleRemoveMember(userId: string) {
+    if (!selectedTeam) return;
+    try {
+      setError(null);
+      await teamsApi.removeTeamMember(selectedTeam.id, userId);
+      await loadTeams();
+      // Refresh selected team
+      const updatedTeam = await teamsApi.getTeam(selectedTeam.id);
+      setSelectedTeam(updatedTeam);
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to remove member';
+      setError(errorMessage);
+      if (!errorMessage.includes('not yet supported')) {
+        console.error('Failed to remove member:', err);
+      }
+    }
+  }
+
+  // Handle update member role
+  async function handleUpdateMemberRole(userId: string, role: 'Owner' | 'Admin' | 'Member') {
+    if (!selectedTeam) return;
+    try {
+      setError(null);
+      await teamsApi.updateTeamMemberRole(selectedTeam.id, { userId, role });
+      await loadTeams();
+      // Refresh selected team
+      const updatedTeam = await teamsApi.getTeam(selectedTeam.id);
+      setSelectedTeam(updatedTeam);
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to update member role';
+      setError(errorMessage);
+      if (!errorMessage.includes('not yet supported')) {
+        console.error('Failed to update member role:', err);
+      }
+    }
+  }
 
   return (
     <div>
@@ -438,6 +571,23 @@ export default function TeamsPage() {
         </Button>
       </div>
 
+      {/* Error Message */}
+      {error && (
+        <div className={cn(
+          'mb-4 p-4 rounded-lg flex items-center gap-2',
+          isLight ? 'bg-yellow-50 text-yellow-700 border border-yellow-200' : 'bg-yellow-900/20 text-yellow-400 border border-yellow-800'
+        )}>
+          <AlertCircle className="w-5 h-5" />
+          <span>{error}</span>
+          <button
+            onClick={() => setError(null)}
+            className={cn('ml-auto text-sm underline')}
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
+
       {/* Stats */}
       <div className="grid grid-cols-3 gap-4 mb-6">
         <Card padding className="flex items-center gap-4">
@@ -445,7 +595,9 @@ export default function TeamsPage() {
             <Building2 className="w-6 h-6 text-blue-500" />
           </div>
           <div>
-            <p className={cn('text-2xl font-bold', isLight ? 'text-gray-900' : 'text-gray-100')}>{mockTeams.length}</p>
+            <p className={cn('text-2xl font-bold', isLight ? 'text-gray-900' : 'text-gray-100')}>
+              {loading ? '...' : teams.length}
+            </p>
             <p className={cn('text-sm', isLight ? 'text-gray-600' : 'text-gray-400')}>Teams</p>
           </div>
         </Card>
@@ -454,7 +606,9 @@ export default function TeamsPage() {
             <Users className="w-6 h-6 text-green-500" />
           </div>
           <div>
-            <p className={cn('text-2xl font-bold', isLight ? 'text-gray-900' : 'text-gray-100')}>{totalMembers}</p>
+            <p className={cn('text-2xl font-bold', isLight ? 'text-gray-900' : 'text-gray-100')}>
+              {loading ? '...' : totalMembers}
+            </p>
             <p className={cn('text-sm', isLight ? 'text-gray-600' : 'text-gray-400')}>Total Members</p>
           </div>
         </Card>
@@ -464,7 +618,7 @@ export default function TeamsPage() {
           </div>
           <div>
             <p className={cn('text-2xl font-bold', isLight ? 'text-gray-900' : 'text-gray-100')}>
-              {mockTeams.reduce((acc, t) => acc + t.resources.length, 0)}
+              {loading ? '...' : teams.reduce((acc, t) => acc + t.resources.length, 0)}
             </p>
             <p className={cn('text-sm', isLight ? 'text-gray-600' : 'text-gray-400')}>Resource Assignments</p>
           </div>
@@ -482,10 +636,21 @@ export default function TeamsPage() {
       </div>
 
       {/* Teams Grid */}
-      {filteredTeams.length > 0 ? (
+      {loading ? (
+        <Card padding>
+          <div className="py-12 flex items-center justify-center">
+            <Loader2 className="w-8 h-8 animate-spin text-gray-400" />
+          </div>
+        </Card>
+      ) : filteredTeams.length > 0 ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {filteredTeams.map((team) => (
-            <TeamCard key={team.id} team={team} onEdit={() => setSelectedTeam(team)} />
+            <TeamCard 
+              key={team.id} 
+              team={team} 
+              onEdit={() => setSelectedTeam(team)}
+              onDelete={() => handleDeleteTeam(team)}
+            />
           ))}
         </div>
       ) : (
@@ -493,7 +658,7 @@ export default function TeamsPage() {
           <Empty
             icon={<Building2 className="w-8 h-8" />}
             title="No teams found"
-            description="Create teams to organize your users"
+            description="Create teams to organize your users. Note: Teams feature requires backend support."
             action={
               <Button leftIcon={<Plus className="w-4 h-4" />} onClick={() => setShowCreate(true)}>
                 Create Team
@@ -504,20 +669,30 @@ export default function TeamsPage() {
       )}
 
       {/* Create Team Modal */}
-      <Modal open={showCreate} onClose={() => setShowCreate(false)} title="Create New Team" size="md">
+      <Modal open={showCreate} onClose={() => !submitting && setShowCreate(false)} title="Create New Team" size="md">
         <div className="space-y-4">
           <div>
             <label className={cn('block text-sm font-medium mb-1.5', isLight ? 'text-gray-700' : 'text-gray-300')}>
-              Team Name
+              Team Name *
             </label>
-            <Input placeholder="Enter team name" />
+            <Input 
+              placeholder="Enter team name"
+              value={createForm.name}
+              onChange={(e) => setCreateForm({ ...createForm, name: e.target.value })}
+              disabled={submitting}
+            />
           </div>
 
           <div>
             <label className={cn('block text-sm font-medium mb-1.5', isLight ? 'text-gray-700' : 'text-gray-300')}>
               Description
             </label>
-            <Input placeholder="Enter team description" />
+            <Input 
+              placeholder="Enter team description"
+              value={createForm.description}
+              onChange={(e) => setCreateForm({ ...createForm, description: e.target.value })}
+              disabled={submitting}
+            />
           </div>
 
           <div>
@@ -530,11 +705,35 @@ export default function TeamsPage() {
                   key={emoji}
                   className={cn(
                     'w-10 h-10 rounded-lg flex items-center justify-center text-xl transition-colors',
-                    isLight ? 'bg-gray-100 hover:bg-gray-200' : 'bg-gray-800 hover:bg-gray-700'
+                    createForm.icon === emoji
+                      ? 'bg-blue-500/20 ring-2 ring-blue-500'
+                      : isLight ? 'bg-gray-100 hover:bg-gray-200' : 'bg-gray-800 hover:bg-gray-700'
                   )}
+                  onClick={() => setCreateForm({ ...createForm, icon: emoji })}
+                  disabled={submitting}
                 >
                   {emoji}
                 </button>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <label className={cn('block text-sm font-medium mb-1.5', isLight ? 'text-gray-700' : 'text-gray-300')}>
+              Team Color
+            </label>
+            <div className="flex gap-2">
+              {['bg-blue-500', 'bg-purple-500', 'bg-green-500', 'bg-amber-500', 'bg-red-500', 'bg-pink-500', 'bg-cyan-500'].map((color) => (
+                <button
+                  key={color}
+                  className={cn(
+                    'w-8 h-8 rounded-full transition-all cursor-pointer',
+                    color,
+                    createForm.color === color && 'ring-2 ring-offset-2 ring-gray-500'
+                  )}
+                  onClick={() => setCreateForm({ ...createForm, color })}
+                  disabled={submitting}
+                />
               ))}
             </div>
           </div>
@@ -543,8 +742,26 @@ export default function TeamsPage() {
             'flex justify-end gap-3 pt-4 border-t',
             isLight ? 'border-gray-200' : 'border-gray-700'
           )}>
-            <Button variant="secondary" onClick={() => setShowCreate(false)}>Cancel</Button>
-            <Button>Create Team</Button>
+            <Button 
+              variant="secondary" 
+              onClick={() => setShowCreate(false)}
+              disabled={submitting}
+            >
+              Cancel
+            </Button>
+            <Button 
+              onClick={handleCreateTeam}
+              disabled={submitting || !createForm.name.trim()}
+            >
+              {submitting ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                  Creating...
+                </>
+              ) : (
+                'Create Team'
+              )}
+            </Button>
           </div>
         </div>
       </Modal>
@@ -556,7 +773,16 @@ export default function TeamsPage() {
         title={`Edit Team: ${selectedTeam?.name}`}
         size="lg"
       >
-        {selectedTeam && <TeamDetail team={selectedTeam} onClose={() => setSelectedTeam(null)} />}
+        {selectedTeam && (
+          <TeamDetail 
+            team={selectedTeam} 
+            onClose={() => setSelectedTeam(null)}
+            onSave={handleUpdateTeam}
+            onAddMember={handleAddMember}
+            onRemoveMember={handleRemoveMember}
+            onUpdateMemberRole={handleUpdateMemberRole}
+          />
+        )}
       </Modal>
     </div>
   );

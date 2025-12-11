@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import {
   Settings,
@@ -14,6 +14,9 @@ import {
   Key,
   Mail,
   Webhook,
+  Loader2,
+  AlertCircle,
+  CheckCircle,
 } from 'lucide-react';
 import {
   Button,
@@ -30,27 +33,133 @@ import {
   Switch,
   Badge,
 } from '@/components/ui';
+import { cn } from '@/utils/cn';
+import { useThemeStore } from '@/stores/theme';
+import * as settingsApi from '@/api/settings';
+import type { SystemSettings } from '@/api/settings';
 
 export default function SystemSettings() {
+  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState(false);
+  const [settings, setSettings] = useState<SystemSettings | null>(null);
+  const resolvedMode = useThemeStore((state) => state.resolvedMode);
+  const isLight = resolvedMode === 'light';
+
+  // Load settings on mount
+  useEffect(() => {
+    loadSettings();
+  }, []);
+
+  async function loadSettings() {
+    try {
+      setLoading(true);
+      setError(null);
+      const data = await settingsApi.getSystemSettings();
+      setSettings(data);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load settings');
+      console.error('Failed to load settings:', err);
+    } finally {
+      setLoading(false);
+    }
+  }
 
   const handleSave = async () => {
-    setSaving(true);
-    await new Promise((r) => setTimeout(r, 1000));
-    setSaving(false);
+    if (!settings) return;
+    
+    try {
+      setSaving(true);
+      setError(null);
+      setSuccess(false);
+      
+      await settingsApi.updateSystemSettings(settings);
+      
+      setSuccess(true);
+      setTimeout(() => setSuccess(false), 3000);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to save settings');
+      console.error('Failed to save settings:', err);
+    } finally {
+      setSaving(false);
+    }
   };
+
+  const updateSetting = (category: keyof SystemSettings, key: string, value: any) => {
+    if (!settings) return;
+    setSettings({
+      ...settings,
+      [category]: {
+        ...settings[category],
+        [key]: value,
+      },
+    });
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <Loader2 className="w-8 h-8 animate-spin text-gray-400" />
+      </div>
+    );
+  }
+
+  if (!settings) {
+    return (
+      <div className="text-center py-12">
+        <AlertCircle className="w-12 h-12 text-red-500 mx-auto mb-4" />
+        <p className={cn('text-lg font-medium', isLight ? 'text-gray-900' : 'text-gray-100')}>
+          Failed to load settings
+        </p>
+        <Button onClick={loadSettings} className="mt-4">Retry</Button>
+      </div>
+    );
+  }
 
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-semibold text-dark-100">System Settings</h1>
-          <p className="text-dark-400">Configure system preferences</p>
+          <h1 className={cn('text-2xl font-semibold', isLight ? 'text-gray-900' : 'text-gray-100')}>System Settings</h1>
+          <p className={cn(isLight ? 'text-gray-600' : 'text-gray-400')}>Configure system preferences</p>
         </div>
-        <Button leftIcon={<Save className="w-4 h-4" />} loading={saving} onClick={handleSave}>
-          Save Changes
+        <Button 
+          leftIcon={saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />} 
+          onClick={handleSave}
+          disabled={saving}
+        >
+          {saving ? 'Saving...' : 'Save Changes'}
         </Button>
       </div>
+
+      {/* Error Message */}
+      {error && (
+        <div className={cn(
+          'mb-4 p-4 rounded-lg flex items-center gap-2',
+          isLight ? 'bg-red-50 text-red-700 border border-red-200' : 'bg-red-900/20 text-red-400 border border-red-800'
+        )}>
+          <AlertCircle className="w-5 h-5" />
+          <span>{error}</span>
+          <button
+            onClick={() => setError(null)}
+            className={cn('ml-auto text-sm underline')}
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
+
+      {/* Success Message */}
+      {success && (
+        <div className={cn(
+          'mb-4 p-4 rounded-lg flex items-center gap-2',
+          isLight ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-green-900/20 text-green-400 border border-green-800'
+        )}>
+          <CheckCircle className="w-5 h-5" />
+          <span>Settings saved successfully</span>
+        </div>
+      )}
 
       <Tabs defaultValue="general">
         <TabList className="mb-6">
@@ -66,43 +175,63 @@ export default function SystemSettings() {
           <div className="grid gap-6">
             <Card>
               <CardHeader>
-                <h3 className="font-medium text-dark-100">Site Information</h3>
+                <h3 className={cn('font-medium', isLight ? 'text-gray-900' : 'text-gray-100')}>Site Information</h3>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-dark-300 mb-1.5">Site Name</label>
-                    <Input defaultValue="VPanel" />
+                    <label className={cn('block text-sm font-medium mb-1.5', isLight ? 'text-gray-700' : 'text-gray-300')}>Site Name</label>
+                    <Input 
+                      value={settings.general.site_name}
+                      onChange={(e) => updateSetting('general', 'site_name', e.target.value)}
+                      disabled={saving}
+                    />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-dark-300 mb-1.5">Site URL</label>
-                    <Input defaultValue="https://panel.example.com" />
+                    <label className={cn('block text-sm font-medium mb-1.5', isLight ? 'text-gray-700' : 'text-gray-300')}>Site URL</label>
+                    <Input 
+                      value={settings.general.site_url}
+                      onChange={(e) => updateSetting('general', 'site_url', e.target.value)}
+                      disabled={saving}
+                    />
                   </div>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-dark-300 mb-1.5">Description</label>
-                  <Input defaultValue="Server Management Panel" />
+                  <label className={cn('block text-sm font-medium mb-1.5', isLight ? 'text-gray-700' : 'text-gray-300')}>Description</label>
+                  <Input 
+                    value={settings.general.site_description}
+                    onChange={(e) => updateSetting('general', 'site_description', e.target.value)}
+                    disabled={saving}
+                  />
                 </div>
               </CardContent>
             </Card>
 
             <Card>
               <CardHeader>
-                <h3 className="font-medium text-dark-100">Appearance</h3>
+                <h3 className={cn('font-medium', isLight ? 'text-gray-900' : 'text-gray-100')}>Appearance</h3>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-dark-300 mb-1.5">Theme</label>
-                    <Select defaultValue="dark">
+                    <label className={cn('block text-sm font-medium mb-1.5', isLight ? 'text-gray-700' : 'text-gray-300')}>Theme</label>
+                    <Select 
+                      value={settings.general.theme}
+                      onChange={(e) => updateSetting('general', 'theme', e.target.value)}
+                      disabled={saving}
+                    >
                       <option value="dark">Dark</option>
                       <option value="light">Light</option>
                       <option value="system">System</option>
                     </Select>
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-dark-300 mb-1.5">Language</label>
-                    <Select defaultValue="en">
+                    <label className={cn('block text-sm font-medium mb-1.5', isLight ? 'text-gray-700' : 'text-gray-300')}>Language</label>
+                    <Select 
+                      value={settings.general.language}
+                      onChange={(e) => updateSetting('general', 'language', e.target.value)}
+                      disabled={saving}
+                    >
                       <option value="en">English</option>
                       <option value="zh">中文</option>
                       <option value="ja">日本語</option>
@@ -111,8 +240,12 @@ export default function SystemSettings() {
                   </div>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-dark-300 mb-1.5">Timezone</label>
-                  <Select defaultValue="UTC">
+                  <label className={cn('block text-sm font-medium mb-1.5', isLight ? 'text-gray-700' : 'text-gray-300')}>Timezone</label>
+                  <Select 
+                    value={settings.general.timezone}
+                    onChange={(e) => updateSetting('general', 'timezone', e.target.value)}
+                    disabled={saving}
+                  >
                     <option value="UTC">UTC</option>
                     <option value="America/New_York">America/New_York</option>
                     <option value="America/Los_Angeles">America/Los_Angeles</option>
@@ -131,19 +264,39 @@ export default function SystemSettings() {
           <div className="grid gap-6">
             <Card>
               <CardHeader>
-                <h3 className="font-medium text-dark-100">Authentication</h3>
+                <h3 className={cn('font-medium', isLight ? 'text-gray-900' : 'text-gray-100')}>Authentication</h3>
               </CardHeader>
               <CardContent className="space-y-4">
-                <Switch label="Enable Two-Factor Authentication (2FA)" defaultChecked />
-                <Switch label="Require 2FA for all users" />
+                <Switch 
+                  label="Enable Two-Factor Authentication (2FA)" 
+                  checked={settings.security.enable_2fa}
+                  onChange={(checked) => updateSetting('security', 'enable_2fa', checked)}
+                  disabled={saving}
+                />
+                <Switch 
+                  label="Require 2FA for all users" 
+                  checked={settings.security.require_2fa}
+                  onChange={(checked) => updateSetting('security', 'require_2fa', checked)}
+                  disabled={saving}
+                />
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-dark-300 mb-1.5">Session Timeout (minutes)</label>
-                    <Input type="number" defaultValue="30" />
+                    <label className={cn('block text-sm font-medium mb-1.5', isLight ? 'text-gray-700' : 'text-gray-300')}>Session Timeout (minutes)</label>
+                    <Input 
+                      type="number" 
+                      value={settings.security.session_timeout}
+                      onChange={(e) => updateSetting('security', 'session_timeout', parseInt(e.target.value) || 0)}
+                      disabled={saving}
+                    />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-dark-300 mb-1.5">Max Login Attempts</label>
-                    <Input type="number" defaultValue="5" />
+                    <label className={cn('block text-sm font-medium mb-1.5', isLight ? 'text-gray-700' : 'text-gray-300')}>Max Login Attempts</label>
+                    <Input 
+                      type="number" 
+                      value={settings.security.max_login_attempts}
+                      onChange={(e) => updateSetting('security', 'max_login_attempts', parseInt(e.target.value) || 0)}
+                      disabled={saving}
+                    />
                   </div>
                 </div>
               </CardContent>
@@ -151,40 +304,54 @@ export default function SystemSettings() {
 
             <Card>
               <CardHeader>
-                <h3 className="font-medium text-dark-100">OAuth Providers</h3>
+                <h3 className={cn('font-medium', isLight ? 'text-gray-900' : 'text-gray-100')}>OAuth Providers</h3>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="p-4 bg-dark-900/50 rounded-lg">
+                <div className={cn('p-4 rounded-lg', isLight ? 'bg-gray-50' : 'bg-gray-900/50')}>
                   <div className="flex items-center justify-between mb-4">
                     <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 bg-dark-700 rounded-lg flex items-center justify-center">
+                      <div className={cn('w-10 h-10 rounded-lg flex items-center justify-center', isLight ? 'bg-gray-200' : 'bg-gray-700')}>
                         <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
                           <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/>
                         </svg>
                       </div>
                       <div>
-                        <h4 className="font-medium text-dark-100">GitHub</h4>
-                        <p className="text-sm text-dark-500">OAuth login with GitHub</p>
+                        <h4 className={cn('font-medium', isLight ? 'text-gray-900' : 'text-gray-100')}>GitHub</h4>
+                        <p className={cn('text-sm', isLight ? 'text-gray-600' : 'text-gray-400')}>OAuth login with GitHub</p>
                       </div>
                     </div>
-                    <Switch defaultChecked />
+                    <Switch 
+                      checked={settings.security.oauth_github_enabled}
+                      onChange={(checked) => updateSetting('security', 'oauth_github_enabled', checked)}
+                      disabled={saving}
+                    />
                   </div>
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-sm text-dark-400 mb-1">Client ID</label>
-                      <Input placeholder="Enter client ID" />
+                      <label className={cn('block text-sm mb-1', isLight ? 'text-gray-600' : 'text-gray-400')}>Client ID</label>
+                      <Input 
+                        placeholder="Enter client ID"
+                        value={settings.security.oauth_github_client_id}
+                        onChange={(e) => updateSetting('security', 'oauth_github_client_id', e.target.value)}
+                        disabled={saving}
+                      />
                     </div>
                     <div>
-                      <label className="block text-sm text-dark-400 mb-1">Client Secret</label>
-                      <Input type="password" placeholder="Enter client secret" />
+                      <label className={cn('block text-sm mb-1', isLight ? 'text-gray-600' : 'text-gray-400')}>Client Secret</label>
+                      <Input 
+                        type="password" 
+                        placeholder="Enter client secret"
+                        disabled={saving}
+                        title="Client secret is stored securely and cannot be displayed"
+                      />
                     </div>
                   </div>
                 </div>
 
-                <div className="p-4 bg-dark-900/50 rounded-lg">
+                <div className={cn('p-4 rounded-lg', isLight ? 'bg-gray-50' : 'bg-gray-900/50')}>
                   <div className="flex items-center justify-between mb-4">
                     <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 bg-dark-700 rounded-lg flex items-center justify-center">
+                      <div className={cn('w-10 h-10 rounded-lg flex items-center justify-center', isLight ? 'bg-gray-200' : 'bg-gray-700')}>
                         <svg className="w-5 h-5" viewBox="0 0 24 24">
                           <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
                           <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
@@ -193,11 +360,35 @@ export default function SystemSettings() {
                         </svg>
                       </div>
                       <div>
-                        <h4 className="font-medium text-dark-100">Google</h4>
-                        <p className="text-sm text-dark-500">OAuth login with Google</p>
+                        <h4 className={cn('font-medium', isLight ? 'text-gray-900' : 'text-gray-100')}>Google</h4>
+                        <p className={cn('text-sm', isLight ? 'text-gray-600' : 'text-gray-400')}>OAuth login with Google</p>
                       </div>
                     </div>
-                    <Switch />
+                    <Switch 
+                      checked={settings.security.oauth_google_enabled}
+                      onChange={(checked) => updateSetting('security', 'oauth_google_enabled', checked)}
+                      disabled={saving}
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className={cn('block text-sm mb-1', isLight ? 'text-gray-600' : 'text-gray-400')}>Client ID</label>
+                      <Input 
+                        placeholder="Enter client ID"
+                        value={settings.security.oauth_google_client_id}
+                        onChange={(e) => updateSetting('security', 'oauth_google_client_id', e.target.value)}
+                        disabled={saving}
+                      />
+                    </div>
+                    <div>
+                      <label className={cn('block text-sm mb-1', isLight ? 'text-gray-600' : 'text-gray-400')}>Client Secret</label>
+                      <Input 
+                        type="password" 
+                        placeholder="Enter client secret"
+                        disabled={saving}
+                        title="Client secret is stored securely and cannot be displayed"
+                      />
+                    </div>
                   </div>
                 </div>
               </CardContent>
@@ -205,7 +396,7 @@ export default function SystemSettings() {
 
             <Card>
               <CardHeader>
-                <h3 className="font-medium text-dark-100">API Keys</h3>
+                <h3 className={cn('font-medium', isLight ? 'text-gray-900' : 'text-gray-100')}>API Keys</h3>
               </CardHeader>
               <CardContent>
                 <div className="space-y-3">
@@ -233,33 +424,64 @@ export default function SystemSettings() {
           <div className="grid gap-6">
             <Card>
               <CardHeader>
-                <h3 className="font-medium text-dark-100">Email Notifications</h3>
+                <h3 className={cn('font-medium', isLight ? 'text-gray-900' : 'text-gray-100')}>Email Notifications</h3>
               </CardHeader>
               <CardContent className="space-y-4">
-                <Switch label="Enable email notifications" defaultChecked />
+                <Switch 
+                  label="Enable email notifications" 
+                  checked={settings.notifications.email_enabled}
+                  onChange={(checked) => updateSetting('notifications', 'email_enabled', checked)}
+                  disabled={saving}
+                />
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-dark-300 mb-1.5">SMTP Host</label>
-                    <Input placeholder="smtp.example.com" />
+                    <label className={cn('block text-sm font-medium mb-1.5', isLight ? 'text-gray-700' : 'text-gray-300')}>SMTP Host</label>
+                    <Input 
+                      placeholder="smtp.example.com"
+                      value={settings.notifications.smtp_host}
+                      onChange={(e) => updateSetting('notifications', 'smtp_host', e.target.value)}
+                      disabled={saving}
+                    />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-dark-300 mb-1.5">SMTP Port</label>
-                    <Input type="number" defaultValue="587" />
+                    <label className={cn('block text-sm font-medium mb-1.5', isLight ? 'text-gray-700' : 'text-gray-300')}>SMTP Port</label>
+                    <Input 
+                      type="number" 
+                      value={settings.notifications.smtp_port}
+                      onChange={(e) => updateSetting('notifications', 'smtp_port', parseInt(e.target.value) || 587)}
+                      disabled={saving}
+                    />
                   </div>
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-dark-300 mb-1.5">SMTP Username</label>
-                    <Input placeholder="username" />
+                    <label className={cn('block text-sm font-medium mb-1.5', isLight ? 'text-gray-700' : 'text-gray-300')}>SMTP Username</label>
+                    <Input 
+                      placeholder="username"
+                      value={settings.notifications.smtp_username}
+                      onChange={(e) => updateSetting('notifications', 'smtp_username', e.target.value)}
+                      disabled={saving}
+                    />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-dark-300 mb-1.5">SMTP Password</label>
-                    <Input type="password" placeholder="password" />
+                    <label className={cn('block text-sm font-medium mb-1.5', isLight ? 'text-gray-700' : 'text-gray-300')}>SMTP Password</label>
+                    <Input 
+                      type="password" 
+                      placeholder="password"
+                      value={settings.notifications.smtp_password}
+                      onChange={(e) => updateSetting('notifications', 'smtp_password', e.target.value)}
+                      disabled={saving}
+                    />
                   </div>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-dark-300 mb-1.5">From Email</label>
-                  <Input placeholder="noreply@example.com" />
+                  <label className={cn('block text-sm font-medium mb-1.5', isLight ? 'text-gray-700' : 'text-gray-300')}>From Email</label>
+                  <Input 
+                    placeholder="noreply@example.com"
+                    value={settings.notifications.from_email}
+                    onChange={(e) => updateSetting('notifications', 'from_email', e.target.value)}
+                    disabled={saving}
+                  />
                 </div>
                 <Button variant="secondary" size="sm" leftIcon={<Mail className="w-4 h-4" />}>
                   Send Test Email
@@ -269,27 +491,67 @@ export default function SystemSettings() {
 
             <Card>
               <CardHeader>
-                <h3 className="font-medium text-dark-100">Alert Types</h3>
+                <h3 className={cn('font-medium', isLight ? 'text-gray-900' : 'text-gray-100')}>Alert Types</h3>
               </CardHeader>
               <CardContent className="space-y-3">
-                <Switch label="CPU usage alerts" defaultChecked />
-                <Switch label="Memory usage alerts" defaultChecked />
-                <Switch label="Disk space alerts" defaultChecked />
-                <Switch label="Service down alerts" defaultChecked />
-                <Switch label="SSL certificate expiry alerts" defaultChecked />
-                <Switch label="Security alerts" defaultChecked />
+                <Switch 
+                  label="CPU usage alerts" 
+                  checked={settings.notifications.cpu_alerts}
+                  onChange={(checked) => updateSetting('notifications', 'cpu_alerts', checked)}
+                  disabled={saving}
+                />
+                <Switch 
+                  label="Memory usage alerts" 
+                  checked={settings.notifications.memory_alerts}
+                  onChange={(checked) => updateSetting('notifications', 'memory_alerts', checked)}
+                  disabled={saving}
+                />
+                <Switch 
+                  label="Disk space alerts" 
+                  checked={settings.notifications.disk_alerts}
+                  onChange={(checked) => updateSetting('notifications', 'disk_alerts', checked)}
+                  disabled={saving}
+                />
+                <Switch 
+                  label="Service down alerts" 
+                  checked={settings.notifications.service_alerts}
+                  onChange={(checked) => updateSetting('notifications', 'service_alerts', checked)}
+                  disabled={saving}
+                />
+                <Switch 
+                  label="SSL certificate expiry alerts" 
+                  checked={settings.notifications.ssl_alerts}
+                  onChange={(checked) => updateSetting('notifications', 'ssl_alerts', checked)}
+                  disabled={saving}
+                />
+                <Switch 
+                  label="Security alerts" 
+                  checked={settings.notifications.security_alerts}
+                  onChange={(checked) => updateSetting('notifications', 'security_alerts', checked)}
+                  disabled={saving}
+                />
               </CardContent>
             </Card>
 
             <Card>
               <CardHeader>
-                <h3 className="font-medium text-dark-100">Webhook Integration</h3>
+                <h3 className={cn('font-medium', isLight ? 'text-gray-900' : 'text-gray-100')}>Webhook Integration</h3>
               </CardHeader>
               <CardContent className="space-y-4">
-                <Switch label="Enable webhooks" />
+                <Switch 
+                  label="Enable webhooks" 
+                  checked={settings.notifications.webhook_enabled}
+                  onChange={(checked) => updateSetting('notifications', 'webhook_enabled', checked)}
+                  disabled={saving}
+                />
                 <div>
-                  <label className="block text-sm font-medium text-dark-300 mb-1.5">Webhook URL</label>
-                  <Input placeholder="https://example.com/webhook" />
+                  <label className={cn('block text-sm font-medium mb-1.5', isLight ? 'text-gray-700' : 'text-gray-300')}>Webhook URL</label>
+                  <Input 
+                    placeholder="https://example.com/webhook"
+                    value={settings.notifications.webhook_url}
+                    onChange={(e) => updateSetting('notifications', 'webhook_url', e.target.value)}
+                    disabled={saving}
+                  />
                 </div>
                 <Button variant="secondary" size="sm" leftIcon={<Webhook className="w-4 h-4" />}>
                   Test Webhook
@@ -304,14 +566,23 @@ export default function SystemSettings() {
           <div className="grid gap-6">
             <Card>
               <CardHeader>
-                <h3 className="font-medium text-dark-100">Automatic Backups</h3>
+                <h3 className={cn('font-medium', isLight ? 'text-gray-900' : 'text-gray-100')}>Automatic Backups</h3>
               </CardHeader>
               <CardContent className="space-y-4">
-                <Switch label="Enable automatic backups" defaultChecked />
+                <Switch 
+                  label="Enable automatic backups" 
+                  checked={settings.backup.auto_backup_enabled}
+                  onChange={(checked) => updateSetting('backup', 'auto_backup_enabled', checked)}
+                  disabled={saving}
+                />
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-dark-300 mb-1.5">Backup Schedule</label>
-                    <Select defaultValue="daily">
+                    <label className={cn('block text-sm font-medium mb-1.5', isLight ? 'text-gray-700' : 'text-gray-300')}>Backup Schedule</label>
+                    <Select 
+                      value={settings.backup.backup_schedule}
+                      onChange={(e) => updateSetting('backup', 'backup_schedule', e.target.value)}
+                      disabled={saving}
+                    >
                       <option value="hourly">Hourly</option>
                       <option value="daily">Daily</option>
                       <option value="weekly">Weekly</option>
@@ -319,25 +590,39 @@ export default function SystemSettings() {
                     </Select>
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-dark-300 mb-1.5">Retention (days)</label>
-                    <Input type="number" defaultValue="30" />
+                    <label className={cn('block text-sm font-medium mb-1.5', isLight ? 'text-gray-700' : 'text-gray-300')}>Retention (days)</label>
+                    <Input 
+                      type="number" 
+                      value={settings.backup.backup_retention}
+                      onChange={(e) => updateSetting('backup', 'backup_retention', parseInt(e.target.value) || 30)}
+                      disabled={saving}
+                    />
                   </div>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-dark-300 mb-1.5">Backup Time</label>
-                  <Input type="time" defaultValue="02:00" />
+                  <label className={cn('block text-sm font-medium mb-1.5', isLight ? 'text-gray-700' : 'text-gray-300')}>Backup Time</label>
+                  <Input 
+                    type="time" 
+                    value={settings.backup.backup_time}
+                    onChange={(e) => updateSetting('backup', 'backup_time', e.target.value)}
+                    disabled={saving}
+                  />
                 </div>
               </CardContent>
             </Card>
 
             <Card>
               <CardHeader>
-                <h3 className="font-medium text-dark-100">Backup Storage</h3>
+                <h3 className={cn('font-medium', isLight ? 'text-gray-900' : 'text-gray-100')}>Backup Storage</h3>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-dark-300 mb-1.5">Storage Type</label>
-                  <Select defaultValue="local">
+                  <label className={cn('block text-sm font-medium mb-1.5', isLight ? 'text-gray-700' : 'text-gray-300')}>Storage Type</label>
+                  <Select 
+                    value={settings.backup.storage_type}
+                    onChange={(e) => updateSetting('backup', 'storage_type', e.target.value)}
+                    disabled={saving}
+                  >
                     <option value="local">Local Storage</option>
                     <option value="s3">Amazon S3</option>
                     <option value="gcs">Google Cloud Storage</option>
@@ -345,15 +630,19 @@ export default function SystemSettings() {
                   </Select>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-dark-300 mb-1.5">Backup Path</label>
-                  <Input defaultValue="/opt/vpanel/backups" />
+                  <label className={cn('block text-sm font-medium mb-1.5', isLight ? 'text-gray-700' : 'text-gray-300')}>Backup Path</label>
+                  <Input 
+                    value={settings.backup.backup_path}
+                    onChange={(e) => updateSetting('backup', 'backup_path', e.target.value)}
+                    disabled={saving}
+                  />
                 </div>
               </CardContent>
             </Card>
 
             <Card>
               <CardHeader>
-                <h3 className="font-medium text-dark-100">Recent Backups</h3>
+                <h3 className={cn('font-medium', isLight ? 'text-gray-900' : 'text-gray-100')}>Recent Backups</h3>
                 <Button variant="secondary" size="sm" leftIcon={<RefreshCw className="w-4 h-4" />}>
                   Backup Now
                 </Button>
@@ -384,32 +673,58 @@ export default function SystemSettings() {
           <div className="grid gap-6">
             <Card>
               <CardHeader>
-                <h3 className="font-medium text-dark-100">Server Configuration</h3>
+                <h3 className={cn('font-medium', isLight ? 'text-gray-900' : 'text-gray-100')}>Server Configuration</h3>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-dark-300 mb-1.5">Server Port</label>
-                    <Input type="number" defaultValue="8080" />
+                    <label className={cn('block text-sm font-medium mb-1.5', isLight ? 'text-gray-700' : 'text-gray-300')}>Server Port</label>
+                    <Input 
+                      type="number" 
+                      value={settings.advanced.server_port}
+                      onChange={(e) => updateSetting('advanced', 'server_port', parseInt(e.target.value) || 8080)}
+                      disabled={true}
+                      title="Server port cannot be changed from UI"
+                    />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-dark-300 mb-1.5">Max Upload Size (MB)</label>
-                    <Input type="number" defaultValue="100" />
+                    <label className={cn('block text-sm font-medium mb-1.5', isLight ? 'text-gray-700' : 'text-gray-300')}>Max Upload Size (MB)</label>
+                    <Input 
+                      type="number" 
+                      value={settings.advanced.max_upload_size}
+                      onChange={(e) => updateSetting('advanced', 'max_upload_size', parseInt(e.target.value) || 100)}
+                      disabled={saving}
+                    />
                   </div>
                 </div>
-                <Switch label="Enable HTTPS" defaultChecked />
-                <Switch label="Enable API rate limiting" defaultChecked />
+                <Switch 
+                  label="Enable HTTPS" 
+                  checked={settings.advanced.enable_https}
+                  onChange={(checked) => updateSetting('advanced', 'enable_https', checked)}
+                  disabled={true}
+                  title="HTTPS settings require server restart"
+                />
+                <Switch 
+                  label="Enable API rate limiting" 
+                  checked={settings.advanced.rate_limit_enabled}
+                  onChange={(checked) => updateSetting('advanced', 'rate_limit_enabled', checked)}
+                  disabled={saving}
+                />
               </CardContent>
             </Card>
 
             <Card>
               <CardHeader>
-                <h3 className="font-medium text-dark-100">Logging</h3>
+                <h3 className={cn('font-medium', isLight ? 'text-gray-900' : 'text-gray-100')}>Logging</h3>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-dark-300 mb-1.5">Log Level</label>
-                  <Select defaultValue="info">
+                  <label className={cn('block text-sm font-medium mb-1.5', isLight ? 'text-gray-700' : 'text-gray-300')}>Log Level</label>
+                  <Select 
+                    value={settings.advanced.log_level}
+                    onChange={(e) => updateSetting('advanced', 'log_level', e.target.value)}
+                    disabled={saving}
+                  >
                     <option value="debug">Debug</option>
                     <option value="info">Info</option>
                     <option value="warn">Warning</option>
@@ -417,15 +732,20 @@ export default function SystemSettings() {
                   </Select>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-dark-300 mb-1.5">Log Retention (days)</label>
-                  <Input type="number" defaultValue="30" />
+                  <label className={cn('block text-sm font-medium mb-1.5', isLight ? 'text-gray-700' : 'text-gray-300')}>Log Retention (days)</label>
+                  <Input 
+                    type="number" 
+                    value={settings.advanced.log_retention}
+                    onChange={(e) => updateSetting('advanced', 'log_retention', parseInt(e.target.value) || 30)}
+                    disabled={saving}
+                  />
                 </div>
               </CardContent>
             </Card>
 
             <Card className="border-red-500/30">
               <CardHeader>
-                <h3 className="font-medium text-red-400">Danger Zone</h3>
+                <h3 className={cn('font-medium', isLight ? 'text-red-600' : 'text-red-400')}>Danger Zone</h3>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="flex items-center justify-between p-4 bg-red-500/10 rounded-lg">

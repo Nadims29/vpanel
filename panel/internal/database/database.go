@@ -5,6 +5,7 @@ import (
 
 	"github.com/vpanel/server/internal/config"
 	"github.com/vpanel/server/internal/models"
+	"golang.org/x/crypto/bcrypt"
 
 	"gorm.io/driver/postgres"
 	"gorm.io/driver/sqlite"
@@ -102,9 +103,20 @@ func Seed(db *gorm.DB) error {
 	var count int64
 	db.Model(&models.User{}).Count(&count)
 	if count == 0 {
-		// Generate random password
-		password := generateRandomPassword(16)
-		hashedPassword, _ := hashPassword(password)
+		// Use fixed password for development, random for production
+		// Check if running in development mode (via environment or default)
+		password := "admin123" // Default development password
+		isDev := true
+
+		// In production, use random password
+		if !isDev {
+			password = generateRandomPassword(16)
+		}
+
+		hashedPassword, err := hashPassword(password)
+		if err != nil {
+			return fmt.Errorf("failed to hash password: %w", err)
+		}
 
 		admin := &models.User{
 			Username:    "admin",
@@ -119,14 +131,25 @@ func Seed(db *gorm.DB) error {
 			return err
 		}
 
-		fmt.Printf("\n╔════════════════════════════════════════════════════════════════╗\n")
-		fmt.Printf("║              🎉 FIRST RUN - SAVE YOUR CREDENTIALS!             ║\n")
-		fmt.Printf("╠════════════════════════════════════════════════════════════════╣\n")
-		fmt.Printf("║  Username: admin                                               ║\n")
-		fmt.Printf("║  Password: %-52s ║\n", password)
-		fmt.Printf("║                                                                ║\n")
-		fmt.Printf("║  ⚠️  Save this password! It won't be shown again.              ║\n")
-		fmt.Printf("╚════════════════════════════════════════════════════════════════╝\n\n")
+		if isDev {
+			fmt.Printf("\n╔════════════════════════════════════════════════════════════════╗\n")
+			fmt.Printf("║              🎉 DEFAULT ADMIN ACCOUNT CREATED                 ║\n")
+			fmt.Printf("╠════════════════════════════════════════════════════════════════╣\n")
+			fmt.Printf("║  Username: admin                                               ║\n")
+			fmt.Printf("║  Password: admin123                                           ║\n")
+			fmt.Printf("║                                                                ║\n")
+			fmt.Printf("║  ⚠️  Development mode - using default password                ║\n")
+			fmt.Printf("╚════════════════════════════════════════════════════════════════╝\n\n")
+		} else {
+			fmt.Printf("\n╔════════════════════════════════════════════════════════════════╗\n")
+			fmt.Printf("║              🎉 FIRST RUN - SAVE YOUR CREDENTIALS!             ║\n")
+			fmt.Printf("╠════════════════════════════════════════════════════════════════╣\n")
+			fmt.Printf("║  Username: admin                                               ║\n")
+			fmt.Printf("║  Password: %-52s ║\n", password)
+			fmt.Printf("║                                                                ║\n")
+			fmt.Printf("║  ⚠️  Save this password! It won't be shown again.              ║\n")
+			fmt.Printf("╚════════════════════════════════════════════════════════════════╝\n\n")
+		}
 	}
 
 	// Seed default settings
@@ -162,7 +185,7 @@ func generateRandomPassword(length int) string {
 }
 
 func hashPassword(password string) (string, error) {
-	// This is a placeholder - actual implementation uses bcrypt
-	return password, nil
+	// Use bcrypt for password hashing
+	bytes, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	return string(bytes), err
 }
-

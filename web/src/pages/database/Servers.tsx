@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Plus,
@@ -45,26 +45,21 @@ import {
 } from '@/components/ui';
 import { cn } from '@/utils/cn';
 import { useThemeStore } from '@/stores/theme';
+import * as databaseApi from '@/api/database';
+import type { DatabaseServer as ApiDatabaseServer, DatabaseType } from '@/api/database';
 
-type DatabaseType = 'mysql' | 'postgresql' | 'mongodb' | 'redis' | 'mariadb';
-
-interface DatabaseServer {
-  id: string;
-  name: string;
-  type: DatabaseType;
-  host: string;
-  port: number;
-  status: 'running' | 'stopped' | 'error';
-  version: string;
-  size: string;
-  connections: { active: number; max: number };
-  databases: number;
-  uptime: string;
-  cpu: number;
-  memory: { used: number; total: number };
-  storage: { used: number; total: number };
+interface DatabaseServer extends ApiDatabaseServer {
+  // Extended fields for display (can be computed from API data)
+  version?: string;
+  size?: string;
+  connections?: { active: number; max: number };
+  databases?: number;
+  uptime?: string;
+  cpu?: number;
+  memory?: { used: number; total: number };
+  storage?: { used: number; total: number };
   lastBackup?: string;
-  isLocal: boolean;
+  isLocal?: boolean;
 }
 
 interface DatabaseInstance {
@@ -77,103 +72,30 @@ interface DatabaseInstance {
   collation: string;
 }
 
-const mockServers: DatabaseServer[] = [
-  {
-    id: '1',
-    name: 'Production MySQL',
-    type: 'mysql',
-    host: 'localhost',
-    port: 3306,
-    status: 'running',
-    version: '8.0.35',
-    size: '45.2 GB',
-    connections: { active: 23, max: 150 },
-    databases: 12,
-    uptime: '45 days',
-    cpu: 12.5,
-    memory: { used: 4.2, total: 8 },
-    storage: { used: 45.2, total: 100 },
-    lastBackup: '2 hours ago',
-    isLocal: true,
-  },
-  {
-    id: '2',
-    name: 'Production PostgreSQL',
-    type: 'postgresql',
-    host: 'localhost',
-    port: 5432,
-    status: 'running',
-    version: '16.1',
-    size: '128.5 GB',
-    connections: { active: 45, max: 200 },
-    databases: 8,
-    uptime: '30 days',
-    cpu: 18.3,
-    memory: { used: 6.8, total: 16 },
-    storage: { used: 128.5, total: 500 },
-    lastBackup: '1 hour ago',
-    isLocal: true,
-  },
-  {
-    id: '3',
-    name: 'Redis Cache',
-    type: 'redis',
-    host: 'localhost',
-    port: 6379,
-    status: 'running',
-    version: '7.2.3',
-    size: '2.1 GB',
-    connections: { active: 156, max: 10000 },
-    databases: 16,
-    uptime: '60 days',
-    cpu: 5.2,
-    memory: { used: 2.1, total: 4 },
-    storage: { used: 2.1, total: 4 },
-    isLocal: true,
-  },
-  {
-    id: '4',
-    name: 'MongoDB Cluster',
-    type: 'mongodb',
-    host: '192.168.1.100',
-    port: 27017,
-    status: 'running',
-    version: '7.0.4',
-    size: '256.8 GB',
-    connections: { active: 89, max: 500 },
-    databases: 5,
-    uptime: '15 days',
-    cpu: 22.1,
-    memory: { used: 12.4, total: 32 },
-    storage: { used: 256.8, total: 1000 },
-    lastBackup: '4 hours ago',
-    isLocal: false,
-  },
-  {
-    id: '5',
-    name: 'Dev MariaDB',
-    type: 'mariadb',
-    host: 'localhost',
-    port: 3307,
-    status: 'stopped',
-    version: '11.2.2',
-    size: '8.5 GB',
-    connections: { active: 0, max: 50 },
-    databases: 4,
+// Helper function to map API status to display status
+function mapStatus(status: string): 'running' | 'stopped' | 'error' {
+  if (status === 'online') return 'running';
+  if (status === 'offline') return 'stopped';
+  return 'error';
+}
+
+// Helper function to enrich server data with default values for display
+function enrichServer(server: ApiDatabaseServer): DatabaseServer {
+  const mappedStatus = mapStatus(server.status);
+  return {
+    ...server,
+    status: mappedStatus,
+    version: 'Unknown',
+    size: '0 GB',
+    connections: { active: 0, max: 0 },
+    databases: 0,
     uptime: '-',
     cpu: 0,
-    memory: { used: 0, total: 2 },
-    storage: { used: 8.5, total: 50 },
-    isLocal: true,
-  },
-];
-
-const mockDatabases: DatabaseInstance[] = [
-  { id: '1', name: 'app_production', serverId: '1', size: '12.5 GB', tables: 45, charset: 'utf8mb4', collation: 'utf8mb4_unicode_ci' },
-  { id: '2', name: 'app_staging', serverId: '1', size: '3.2 GB', tables: 45, charset: 'utf8mb4', collation: 'utf8mb4_unicode_ci' },
-  { id: '3', name: 'analytics', serverId: '1', size: '28.1 GB', tables: 12, charset: 'utf8mb4', collation: 'utf8mb4_general_ci' },
-  { id: '4', name: 'logs', serverId: '1', size: '1.4 GB', tables: 3, charset: 'utf8mb4', collation: 'utf8mb4_unicode_ci' },
-];
+    memory: { used: 0, total: 0 },
+    storage: { used: 0, total: 0 },
+    isLocal: server.host === 'localhost' || server.host === '127.0.0.1',
+  };
+}
 
 const dbTypeConfig: Record<DatabaseType, { icon: string; color: string; bgColor: string }> = {
   mysql: { icon: '🐬', color: 'text-blue-500', bgColor: 'bg-blue-500/10' },
@@ -183,12 +105,27 @@ const dbTypeConfig: Record<DatabaseType, { icon: string; color: string; bgColor:
   mariadb: { icon: '🦭', color: 'text-amber-600', bgColor: 'bg-amber-600/10' },
 };
 
-function ServerCard({ server, onSelect }: { server: DatabaseServer; onSelect: () => void }) {
+function ServerCard({ server, onSelect, onDelete }: { server: DatabaseServer; onSelect: () => void; onDelete: () => void }) {
   const [showDelete, setShowDelete] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const resolvedMode = useThemeStore((state) => state.resolvedMode);
   const isLight = resolvedMode === 'light';
   const typeConfig = dbTypeConfig[server.type];
+
+  const handleDelete = async () => {
+    setDeleting(true);
+    try {
+      await databaseApi.deleteServer(server.id);
+      setShowDelete(false);
+      onDelete();
+    } catch (error) {
+      console.error('Failed to delete server:', error);
+      alert('Failed to delete server');
+    } finally {
+      setDeleting(false);
+    }
+  };
 
   return (
     <>
@@ -338,11 +275,12 @@ function ServerCard({ server, onSelect }: { server: DatabaseServer; onSelect: ()
       <ConfirmModal
         open={showDelete}
         onClose={() => setShowDelete(false)}
-        onConfirm={() => setShowDelete(false)}
+        onConfirm={handleDelete}
         type="danger"
         title="Remove Database Server"
         message={`Are you sure you want to remove "${server.name}"? This will not delete the actual database data.`}
-        confirmText="Remove"
+        confirmText={deleting ? "Removing..." : "Remove"}
+        disabled={deleting}
       />
     </>
   );
@@ -352,9 +290,28 @@ function DatabaseList({ server }: { server: DatabaseServer }) {
   const resolvedMode = useThemeStore((state) => state.resolvedMode);
   const isLight = resolvedMode === 'light';
   const [search, setSearch] = useState('');
+  const [databases, setDatabases] = useState<DatabaseInstance[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const databases = mockDatabases.filter(
-    (db) => db.serverId === server.id && db.name.toLowerCase().includes(search.toLowerCase())
+  useEffect(() => {
+    const fetchDatabases = async () => {
+      try {
+        setLoading(true);
+        const data = await databaseApi.listDatabases(server.id);
+        setDatabases(data);
+      } catch (error) {
+        console.error('Failed to fetch databases:', error);
+        setDatabases([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchDatabases();
+  }, [server.id]);
+
+  const filteredDatabases = databases.filter(
+    (db) => db.name.toLowerCase().includes(search.toLowerCase())
   );
 
   return (
@@ -389,7 +346,20 @@ function DatabaseList({ server }: { server: DatabaseServer }) {
             </tr>
           </thead>
           <tbody>
-            {databases.map((db) => (
+            {loading ? (
+              <tr>
+                <td colSpan={6} className={cn('px-4 py-8 text-center', isLight ? 'text-gray-500' : 'text-gray-400')}>
+                  Loading databases...
+                </td>
+              </tr>
+            ) : filteredDatabases.length === 0 ? (
+              <tr>
+                <td colSpan={6} className={cn('px-4 py-8 text-center', isLight ? 'text-gray-500' : 'text-gray-400')}>
+                  No databases found
+                </td>
+              </tr>
+            ) : (
+              filteredDatabases.map((db) => (
               <motion.tr
                 key={db.id}
                 initial={{ opacity: 0 }}
@@ -431,10 +401,11 @@ function DatabaseList({ server }: { server: DatabaseServer }) {
                   </Dropdown>
                 </td>
               </motion.tr>
-            ))}
+            ))
+            )}
           </tbody>
         </table>
-        {databases.length === 0 && (
+        {!loading && filteredDatabases.length === 0 && databases.length === 0 && (
           <div className="py-12">
             <Empty
               icon={<Database className="w-8 h-8" />}
@@ -702,10 +673,77 @@ export default function DatabaseServers() {
   const [showAdd, setShowAdd] = useState(false);
   const [selectedServer, setSelectedServer] = useState<DatabaseServer | null>(null);
   const [filterType, setFilterType] = useState<DatabaseType | 'all'>('all');
+  const [servers, setServers] = useState<DatabaseServer[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const resolvedMode = useThemeStore((state) => state.resolvedMode);
   const isLight = resolvedMode === 'light';
 
-  const filteredServers = mockServers.filter((s) => {
+  // Form state for adding server
+  const [formData, setFormData] = useState({
+    name: '',
+    type: 'mysql' as DatabaseType,
+    host: 'localhost',
+    port: 3306,
+    username: '',
+    password: '',
+  });
+  const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    fetchServers();
+  }, []);
+
+  const fetchServers = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const data = await databaseApi.listServers();
+      setServers(data.map(enrichServer));
+    } catch (err) {
+      console.error('Failed to fetch servers:', err);
+      setError('Failed to load database servers');
+      setServers([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleAddServer = async () => {
+    if (!formData.name || !formData.host || !formData.username) {
+      alert('Please fill in all required fields');
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      await databaseApi.createServer({
+        name: formData.name,
+        type: formData.type,
+        host: formData.host,
+        port: formData.port,
+        username: formData.username,
+        password: formData.password,
+      });
+      setShowAdd(false);
+      setFormData({
+        name: '',
+        type: 'mysql',
+        host: 'localhost',
+        port: 3306,
+        username: '',
+        password: '',
+      });
+      fetchServers();
+    } catch (err: any) {
+      console.error('Failed to create server:', err);
+      alert(err?.message || 'Failed to create database server');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const filteredServers = servers.filter((s) => {
     const matchesSearch = s.name.toLowerCase().includes(search.toLowerCase()) ||
       s.host.toLowerCase().includes(search.toLowerCase());
     const matchesType = filterType === 'all' || s.type === filterType;
@@ -713,9 +751,9 @@ export default function DatabaseServers() {
   });
 
   const stats = {
-    total: mockServers.length,
-    running: mockServers.filter((s) => s.status === 'running').length,
-    stopped: mockServers.filter((s) => s.status === 'stopped').length,
+    total: servers.length,
+    running: servers.filter((s) => s.status === 'running').length,
+    stopped: servers.filter((s) => s.status === 'stopped').length,
   };
 
   if (selectedServer) {
@@ -794,7 +832,24 @@ export default function DatabaseServers() {
       </div>
 
       {/* Servers Grid */}
-      {filteredServers.length > 0 ? (
+      {loading ? (
+        <Card padding>
+          <div className={cn('py-12 text-center', isLight ? 'text-gray-500' : 'text-gray-400')}>
+            <RefreshCw className="w-8 h-8 mx-auto mb-4 animate-spin" />
+            <p>Loading database servers...</p>
+          </div>
+        </Card>
+      ) : error ? (
+        <Card padding>
+          <div className={cn('py-12 text-center', isLight ? 'text-red-600' : 'text-red-400')}>
+            <AlertCircle className="w-8 h-8 mx-auto mb-4" />
+            <p className="mb-4">{error}</p>
+            <Button onClick={fetchServers} leftIcon={<RefreshCw className="w-4 h-4" />}>
+              Retry
+            </Button>
+          </div>
+        </Card>
+      ) : filteredServers.length > 0 ? (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           <AnimatePresence>
             {filteredServers.map((server) => (
@@ -802,6 +857,7 @@ export default function DatabaseServers() {
                 key={server.id} 
                 server={server} 
                 onSelect={() => setSelectedServer(server)}
+                onDelete={fetchServers}
               />
             ))}
           </AnimatePresence>
@@ -811,7 +867,7 @@ export default function DatabaseServers() {
           <Empty
             icon={<Database className="w-8 h-8 text-gray-500" />}
             title="No database servers found"
-            description="Add your first database server to start managing"
+            description={search || filterType !== 'all' ? "No servers match your filters" : "Add your first database server to start managing"}
             action={
               <Button leftIcon={<Plus className="w-5 h-5" />} onClick={() => setShowAdd(true)}>
                 Add Server
@@ -830,16 +886,32 @@ export default function DatabaseServers() {
 
           <div>
             <label className={cn('block text-sm font-medium mb-1.5', isLight ? 'text-gray-700' : 'text-gray-300')}>
-              Server Name
+              Server Name *
             </label>
-            <Input placeholder="My Database Server" />
+            <Input 
+              placeholder="My Database Server" 
+              value={formData.name}
+              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+            />
           </div>
 
           <div>
             <label className={cn('block text-sm font-medium mb-1.5', isLight ? 'text-gray-700' : 'text-gray-300')}>
-              Database Type
+              Database Type *
             </label>
             <select
+              value={formData.type}
+              onChange={(e) => {
+                const type = e.target.value as DatabaseType;
+                const defaultPorts: Record<DatabaseType, number> = {
+                  mysql: 3306,
+                  postgresql: 5432,
+                  mongodb: 27017,
+                  redis: 6379,
+                  mariadb: 3306,
+                };
+                setFormData({ ...formData, type, port: defaultPorts[type] });
+              }}
               className={cn(
                 'w-full px-3 py-2 rounded-lg border text-sm',
                 isLight ? 'bg-white border-gray-200 text-gray-700' : 'bg-gray-900 border-gray-700 text-gray-300'
@@ -856,38 +928,60 @@ export default function DatabaseServers() {
           <div className="grid grid-cols-3 gap-4">
             <div className="col-span-2">
               <label className={cn('block text-sm font-medium mb-1.5', isLight ? 'text-gray-700' : 'text-gray-300')}>
-                Host
+                Host *
               </label>
-              <Input placeholder="localhost" />
+              <Input 
+                placeholder="localhost" 
+                value={formData.host}
+                onChange={(e) => setFormData({ ...formData, host: e.target.value })}
+              />
             </div>
             <div>
               <label className={cn('block text-sm font-medium mb-1.5', isLight ? 'text-gray-700' : 'text-gray-300')}>
-                Port
+                Port *
               </label>
-              <Input placeholder="3306" />
+              <Input 
+                type="number"
+                placeholder="3306" 
+                value={formData.port}
+                onChange={(e) => setFormData({ ...formData, port: parseInt(e.target.value) || 3306 })}
+              />
             </div>
           </div>
 
           <div>
             <label className={cn('block text-sm font-medium mb-1.5', isLight ? 'text-gray-700' : 'text-gray-300')}>
-              Username
+              Username *
             </label>
-            <Input placeholder="root" />
+            <Input 
+              placeholder="root" 
+              value={formData.username}
+              onChange={(e) => setFormData({ ...formData, username: e.target.value })}
+            />
           </div>
 
           <div>
             <label className={cn('block text-sm font-medium mb-1.5', isLight ? 'text-gray-700' : 'text-gray-300')}>
-              Password
+              Password *
             </label>
-            <Input type="password" placeholder="••••••••" />
+            <Input 
+              type="password" 
+              placeholder="••••••••" 
+              value={formData.password}
+              onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+            />
           </div>
 
           <div className={cn(
             'flex justify-end gap-3 pt-4 border-t',
             isLight ? 'border-gray-200' : 'border-gray-700'
           )}>
-            <Button variant="secondary" onClick={() => setShowAdd(false)}>Cancel</Button>
-            <Button>Test & Add</Button>
+            <Button variant="secondary" onClick={() => setShowAdd(false)} disabled={submitting}>
+              Cancel
+            </Button>
+            <Button onClick={handleAddServer} disabled={submitting}>
+              {submitting ? 'Testing & Adding...' : 'Test & Add'}
+            </Button>
           </div>
         </div>
       </Modal>
