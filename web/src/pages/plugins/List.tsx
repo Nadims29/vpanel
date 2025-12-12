@@ -7,7 +7,6 @@ import {
   Trash2,
   Settings,
   RefreshCw,
-  Search,
   ExternalLink,
   Tag,
 } from 'lucide-react';

@@ -5,7 +5,6 @@ import {
   Download,
   Power,
   PowerOff,
-  Search,
   RefreshCw,
   ExternalLink,
   Tag,
