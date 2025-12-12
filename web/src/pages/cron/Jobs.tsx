@@ -407,11 +407,12 @@ export default function CronJobs() {
         case 'schedule':
           comparison = a.schedule.localeCompare(b.schedule);
           break;
-        case 'last_run_at':
+        case 'last_run_at': {
           const aTime = a.last_run_at ? new Date(a.last_run_at).getTime() : 0;
           const bTime = b.last_run_at ? new Date(b.last_run_at).getTime() : 0;
           comparison = aTime - bTime;
           break;
+        }
       }
       return sortOrder === 'asc' ? comparison : -comparison;
     });

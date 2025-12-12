@@ -1,9 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import { motion } from 'framer-motion';
-import { Download, Trash2, RefreshCw, Search } from 'lucide-react';
+import { Download, Trash2, RefreshCw } from 'lucide-react';
 import {
   Button,
-  Card,
   Badge,
   SearchInput,
   Modal,

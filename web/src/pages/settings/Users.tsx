@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import {
   Plus,
   User,
@@ -10,7 +10,6 @@ import {
   Shield,
   ShieldCheck,
   ShieldAlert,
-  Mail,
   Key,
   Clock,
   CheckCircle,
@@ -18,9 +17,7 @@ import {
   Lock,
   Unlock,
   UserCog,
-  Building2,
   Activity,
-  LogIn,
   Send,
   AlertCircle,
   Loader2,

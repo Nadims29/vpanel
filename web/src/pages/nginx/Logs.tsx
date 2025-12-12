@@ -1,5 +1,4 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { motion } from 'framer-motion';
 import {
   RefreshCw,
   Copy,
@@ -81,6 +80,7 @@ export default function NginxLogs() {
 
   useEffect(() => {
     fetchLogs();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [logType, selectedSiteId, lines]);
 
   // Auto refresh
@@ -99,6 +99,7 @@ export default function NginxLogs() {
         setAutoRefreshInterval(null);
       }
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoRefresh, fetchLogs]);
 
   const handleCopy = () => {

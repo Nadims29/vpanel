@@ -19,8 +19,6 @@ import {
 import {
   Button,
   Card,
-  CardHeader,
-  CardContent,
   Badge,
   SearchInput,
   Dropdown,
@@ -32,7 +30,6 @@ import {
   TabList,
   Tab,
   TabPanel,
-  StatusDot,
   Empty,
   Input,
   Select,
@@ -42,7 +39,7 @@ import {
 import { cn } from '@/utils/cn';
 import toast from 'react-hot-toast';
 import * as nginxApi from '@/api/nginx';
-import type { NginxSite, CreateSiteRequest, SiteAnalytics } from '@/api/nginx';
+import type { NginxSite, SiteAnalytics } from '@/api/nginx';
 
 interface Site {
   id: string;

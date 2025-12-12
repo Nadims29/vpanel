@@ -3,14 +3,12 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   Puzzle,
   Download,
-  Check,
   Power,
   PowerOff,
   Search,
   RefreshCw,
   ExternalLink,
   Tag,
-  Package,
   Filter,
 } from 'lucide-react';
 import {

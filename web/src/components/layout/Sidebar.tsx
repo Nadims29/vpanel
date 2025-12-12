@@ -114,7 +114,6 @@ export default function Sidebar() {
     );
   };
 
-  const isActive = (path: string) => location.pathname === path;
   const isChildActive = (children: { path: string }[]) =>
     children.some((child) => location.pathname.startsWith(child.path));
 

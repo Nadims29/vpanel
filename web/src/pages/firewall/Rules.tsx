@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { AnimatePresence } from 'framer-motion';
 import {
   Plus,
   Trash2,
@@ -7,8 +7,6 @@ import {
   Shield,
   ShieldOff,
   RefreshCw,
-  Search,
-  Filter,
   MoreVertical,
   CheckCircle2,
   XCircle,
@@ -279,7 +277,7 @@ function RuleFormModal({
             </label>
             <Select
               value={formData.protocol}
-              onChange={(e) => setFormData({ ...formData, protocol: e.target.value as any })}
+              onChange={(e) => setFormData({ ...formData, protocol: e.target.value as 'tcp' | 'udp' | 'icmp' | 'all' })}
               required
             >
               <option value="tcp">TCP</option>
@@ -383,7 +381,6 @@ export default function FirewallRules() {
   const [filter, setFilter] = useState<'all' | 'enabled' | 'disabled'>('all');
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [editingRule, setEditingRule] = useState<FirewallRule | undefined>();
-  const [activeTab, setActiveTab] = useState<string>('rules');
 
   const nodeId = '1';
 
@@ -595,7 +592,7 @@ export default function FirewallRules() {
                     />
                     <Select
                       value={filter}
-                      onChange={(e) => setFilter(e.target.value as any)}
+                      onChange={(e) => setFilter(e.target.value as 'all' | 'enabled' | 'disabled')}
                       className="w-40"
                     >
                       <option value="all">All Rules</option>

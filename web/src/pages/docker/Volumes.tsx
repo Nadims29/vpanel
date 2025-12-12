@@ -3,7 +3,6 @@ import { motion } from 'framer-motion';
 import { Plus, Trash2, RefreshCw, HardDrive as HardDriveIcon, Folder } from 'lucide-react';
 import {
   Button,
-  Card,
   Badge,
   SearchInput,
   Modal,

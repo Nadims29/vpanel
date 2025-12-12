@@ -3,8 +3,6 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   Plus,
   Shield,
-  Lock,
-  Calendar,
   MoreVertical,
   Trash2,
   RefreshCw,
@@ -26,7 +24,6 @@ import {
   ConfirmModal,
   Empty,
   Input,
-  Select,
   Switch,
   Spinner,
   Tabs,
@@ -291,7 +288,7 @@ export default function NginxCertificates() {
       console.error('Failed to create certificate:', error);
       toast.error(error instanceof Error ? error.message : 'Failed to create certificate');
     }
-  }, [leDomain, leEmail, fetchCertificates]);
+  }, [leDomain, fetchCertificates]);
 
   const handleCreateCustom = useCallback(async () => {
     if (!customDomain.trim() || !customCertPath.trim() || !customKeyPath.trim()) {

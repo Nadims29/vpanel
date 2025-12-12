@@ -122,7 +122,7 @@ export interface SwitchProps extends Omit<InputHTMLAttributes<HTMLInputElement>,
 }
 
 export const Switch = forwardRef<HTMLInputElement, SwitchProps>(
-  ({ className, label, checked, onChange, ...props }, ref) => (
+  ({ className: _className, label, checked, onChange, ...props }, ref) => (
     <label className="flex items-center gap-3 cursor-pointer">
       <div className="relative">
         <input

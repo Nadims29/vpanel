@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import {
   Plus,
   Download,
@@ -12,13 +12,10 @@ import {
   XCircle,
   AlertCircle,
   Play,
-  Pause,
   RefreshCw,
   Calendar,
-  Database,
   FileArchive,
   Cloud,
-  Server,
   Settings,
   History,
 } from 'lucide-react';
@@ -109,7 +106,7 @@ function convertBackup(apiBackup: ApiDatabaseBackup, servers: databaseApi.Databa
     database: apiBackup.database,
     server: serverName,
     serverId: apiBackup.server_id,
-    serverType: serverType as any,
+    serverType: serverType as Backup['serverType'],
     type: 'full', // API doesn't distinguish, default to full
     status: displayStatus,
     size: sizeStr,
@@ -508,9 +505,9 @@ export default function DatabaseBackups() {
       setTimeout(() => {
         fetchData();
       }, 1000);
-    } catch (err: any) {
+    } catch (err) {
       console.error('Failed to create backup:', err);
-      alert(err?.message || 'Failed to create backup');
+      alert(err instanceof Error ? err.message : 'Failed to create backup');
     } finally {
       setSubmitting(false);
     }

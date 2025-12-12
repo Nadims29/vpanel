@@ -1,4 +1,4 @@
-import { get, post, put, del } from './client';
+// Note: get, post, put, del will be used when backend supports custom roles
 import * as usersApi from './users';
 
 // Role interface
@@ -132,20 +132,20 @@ export async function getRole(id: string): Promise<Role> {
 }
 
 // Create a custom role (would need backend support)
-export async function createRole(data: CreateRoleRequest): Promise<Role> {
+export async function createRole(_data: CreateRoleRequest): Promise<Role> {
   // TODO: Implement when backend supports custom roles
   // For now, this is a placeholder
   throw new Error('Custom roles not yet supported by backend');
 }
 
 // Update role (system roles are read-only, custom roles can be updated)
-export async function updateRole(id: string, data: UpdateRoleRequest): Promise<Role> {
+export async function updateRole(_id: string, _data: UpdateRoleRequest): Promise<Role> {
   // TODO: Implement when backend supports custom roles
   throw new Error('Role updates not yet supported by backend');
 }
 
 // Delete role
-export async function deleteRole(id: string): Promise<void> {
+export async function deleteRole(_id: string): Promise<void> {
   // TODO: Implement when backend supports custom roles
   throw new Error('Role deletion not yet supported by backend');
 }

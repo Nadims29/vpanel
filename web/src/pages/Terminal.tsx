@@ -117,10 +117,11 @@ function TerminalPane({ tabId, isActive }: { tabId: string; isActive: boolean })
       xtermRef.current = null;
       fitAddonRef.current = null;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tabId]);
 
   // Connect to WebSocket
-  const connectWebSocket = useCallback((xterm: XTerm, fitAddon: FitAddon) => {
+  const connectWebSocket = useCallback((xterm: XTerm, _fitAddon: FitAddon) => {
     const token = useAuthStore.getState().token;
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const host = window.location.host;

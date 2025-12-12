@@ -73,7 +73,7 @@ export async function getSystemSettings(): Promise<SystemSettings> {
 // Update system settings
 export async function updateSystemSettings(updates: Partial<SystemSettings>): Promise<void> {
   // Flatten nested structure for API
-  const flatUpdates: Record<string, any> = {};
+  const flatUpdates: Record<string, string | number | boolean> = {};
   
   if (updates.general) {
     Object.entries(updates.general).forEach(([key, value]) => {

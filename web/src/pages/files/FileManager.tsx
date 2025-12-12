@@ -99,13 +99,13 @@ export default function FileManager() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [cutPaths, setCutPaths] = useState<Set<string>>(new Set());
 
   const pathParts = currentPath.split('/').filter(Boolean);
 
   // Load files when path changes
   useEffect(() => {
     loadFiles();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentPath]);
 
   const loadFiles = async () => {
@@ -260,25 +260,6 @@ export default function FileManager() {
   const handleCut = () => {
     setCutPaths(new Set(selected));
     setSelected(new Set());
-  };
-
-  const handlePaste = async (destPath: string) => {
-    try {
-      const operations = Array.from(cutPaths).map(async (srcPath) => {
-        const fileName = srcPath.split('/').pop() || '';
-        const dest = destPath === '/' ? `/${fileName}` : `${destPath}/${fileName}`;
-        if (cutPaths.size > 0) {
-          await filesAPI.moveFile(srcPath, dest);
-        } else {
-          await filesAPI.copyFile(srcPath, dest);
-        }
-      });
-      await Promise.all(operations);
-      setCutPaths(new Set());
-      await loadFiles();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to paste files');
-    }
   };
 
   const openRenameModal = (path: string) => {

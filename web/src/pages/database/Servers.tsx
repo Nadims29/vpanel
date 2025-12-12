@@ -15,13 +15,9 @@ import {
   Play,
   Square,
   Terminal,
-  Copy,
-  Eye,
-  EyeOff,
   HardDrive,
   Users,
   Table2,
-  Zap,
   Clock,
   Download,
   Upload,
@@ -107,7 +103,6 @@ const dbTypeConfig: Record<DatabaseType, { icon: string; color: string; bgColor:
 
 function ServerCard({ server, onSelect, onDelete }: { server: DatabaseServer; onSelect: () => void; onDelete: () => void }) {
   const [showDelete, setShowDelete] = useState(false);
-  const [showPassword, setShowPassword] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const resolvedMode = useThemeStore((state) => state.resolvedMode);
   const isLight = resolvedMode === 'light';
@@ -735,9 +730,9 @@ export default function DatabaseServers() {
         password: '',
       });
       fetchServers();
-    } catch (err: any) {
+    } catch (err) {
       console.error('Failed to create server:', err);
-      alert(err?.message || 'Failed to create database server');
+      alert(err instanceof Error ? err.message : 'Failed to create database server');
     } finally {
       setSubmitting(false);
     }

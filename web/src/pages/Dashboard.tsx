@@ -2,7 +2,6 @@ import { useState, useEffect, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import {
-  Server,
   Container,
   Globe,
   Database,

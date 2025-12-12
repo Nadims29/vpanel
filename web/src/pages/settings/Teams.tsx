@@ -38,7 +38,7 @@ import {
 import { cn } from '@/utils/cn';
 import { useThemeStore } from '@/stores/theme';
 import * as teamsApi from '@/api/teams';
-import type { Team, TeamMember } from '@/api/teams';
+import type { Team } from '@/api/teams';
 
 // Types are imported from API
 
@@ -158,7 +158,7 @@ function TeamDetail({
   team, 
   onClose,
   onSave,
-  onAddMember,
+  onAddMember: _onAddMember,
   onRemoveMember,
   onUpdateMemberRole
 }: { 

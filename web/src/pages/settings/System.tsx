@@ -1,14 +1,10 @@
 import { useState, useEffect } from 'react';
-import { motion } from 'framer-motion';
 import {
   Settings,
-  Globe,
   Shield,
   Bell,
   Database,
   Server,
-  Moon,
-  Sun,
   Save,
   RefreshCw,
   Key,
@@ -23,7 +19,6 @@ import {
   Card,
   CardHeader,
   CardContent,
-  CardFooter,
   Tabs,
   TabList,
   Tab,
@@ -31,7 +26,6 @@ import {
   Input,
   Select,
   Switch,
-  Badge,
 } from '@/components/ui';
 import { cn } from '@/utils/cn';
 import { useThemeStore } from '@/stores/theme';
@@ -86,7 +80,7 @@ export default function SystemSettings() {
     }
   };
 
-  const updateSetting = (category: keyof SystemSettings, key: string, value: any) => {
+  const updateSetting = (category: keyof SystemSettings, key: string, value: string | number | boolean) => {
     if (!settings) return;
     setSettings({
       ...settings,

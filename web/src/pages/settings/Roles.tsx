@@ -4,14 +4,11 @@ import {
   Plus,
   Shield,
   ShieldCheck,
-  ShieldAlert,
   MoreVertical,
   Trash2,
   Edit,
   Copy,
   Users,
-  Check,
-  X,
   Lock,
   Eye,
   Pencil,
@@ -45,14 +42,6 @@ import { cn } from '@/utils/cn';
 import { useThemeStore } from '@/stores/theme';
 import * as rolesApi from '@/api/roles';
 import type { Role } from '@/api/roles';
-
-interface Permission {
-  id: string;
-  name: string;
-  description: string;
-  category: string;
-  actions: ('read' | 'write' | 'delete' | 'admin')[];
-}
 
 // Role interface is imported from API
 
@@ -447,8 +436,8 @@ function RoleEditor({
                                 <input
                                   type="checkbox"
                                   disabled={readOnly || saving}
-                                  checked={hasPermission(category.id, permission.id, action as any)}
-                                  onChange={() => togglePermission(category.id, permission.id, action as any)}
+                              checked={hasPermission(category.id, permission.id, action as 'read' | 'write' | 'delete' | 'admin')}
+                              onChange={() => togglePermission(category.id, permission.id, action as 'read' | 'write' | 'delete' | 'admin')}
                                   className="rounded"
                                 />
                               </td>

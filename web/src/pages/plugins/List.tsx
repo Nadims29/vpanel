@@ -8,7 +8,6 @@ import {
   Settings,
   RefreshCw,
   Search,
-  Package,
   ExternalLink,
   Tag,
 } from 'lucide-react';

@@ -1,4 +1,4 @@
-import { HTMLAttributes, TdHTMLAttributes, ThHTMLAttributes, forwardRef } from 'react';
+import { HTMLAttributes, TdHTMLAttributes, forwardRef } from 'react';
 import { cn } from '@/utils/cn';
 
 export const Table = forwardRef<HTMLTableElement, HTMLAttributes<HTMLTableElement>>(
@@ -61,7 +61,7 @@ export const TableCell = forwardRef<HTMLTableCellElement, TableCellProps>(
     
     return (
       <Component
-        ref={ref as any}
+        ref={ref as React.Ref<HTMLTableCellElement>}
         className={cn(
           'px-4 py-3',
           header && 'text-xs font-medium text-dark-400 uppercase tracking-wider bg-dark-800/50 border-b border-dark-700',

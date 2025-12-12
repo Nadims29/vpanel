@@ -1,5 +1,4 @@
-import { get, post, put, del } from './client';
-import * as usersApi from './users';
+// Note: get, post, put, del and usersApi will be used when backend supports teams
 
 // Team interface
 export interface Team {
@@ -56,7 +55,7 @@ export async function listTeams(): Promise<Team[]> {
   try {
     // TODO: Implement when backend supports teams
     // For now, return empty array or build from user data if teams field exists
-    const users = await usersApi.listUsers();
+    // When backend supports teams, we can use usersApi.listUsers() to get team data
     
     // Extract unique team names from users (if users have teams field)
     // For now, return empty array since backend doesn't support teams yet
@@ -68,49 +67,49 @@ export async function listTeams(): Promise<Team[]> {
 }
 
 // Get team by ID
-export async function getTeam(id: string): Promise<Team> {
+export async function getTeam(_id: string): Promise<Team> {
   // TODO: Implement when backend supports teams
   throw new Error('Teams not yet supported by backend');
 }
 
 // Create a new team
-export async function createTeam(data: CreateTeamRequest): Promise<Team> {
+export async function createTeam(_data: CreateTeamRequest): Promise<Team> {
   // TODO: Implement when backend supports teams
   throw new Error('Teams not yet supported by backend');
 }
 
 // Update team
-export async function updateTeam(id: string, data: UpdateTeamRequest): Promise<Team> {
+export async function updateTeam(_id: string, _data: UpdateTeamRequest): Promise<Team> {
   // TODO: Implement when backend supports teams
   throw new Error('Teams not yet supported by backend');
 }
 
 // Delete team
-export async function deleteTeam(id: string): Promise<void> {
+export async function deleteTeam(_id: string): Promise<void> {
   // TODO: Implement when backend supports teams
   throw new Error('Teams not yet supported by backend');
 }
 
 // Add member to team
-export async function addTeamMember(teamId: string, data: AddMemberRequest): Promise<void> {
+export async function addTeamMember(_teamId: string, _data: AddMemberRequest): Promise<void> {
   // TODO: Implement when backend supports teams
   throw new Error('Teams not yet supported by backend');
 }
 
 // Remove member from team
-export async function removeTeamMember(teamId: string, userId: string): Promise<void> {
+export async function removeTeamMember(_teamId: string, _userId: string): Promise<void> {
   // TODO: Implement when backend supports teams
   throw new Error('Teams not yet supported by backend');
 }
 
 // Update member role in team
-export async function updateTeamMemberRole(teamId: string, data: UpdateMemberRoleRequest): Promise<void> {
+export async function updateTeamMemberRole(_teamId: string, _data: UpdateMemberRoleRequest): Promise<void> {
   // TODO: Implement when backend supports teams
   throw new Error('Teams not yet supported by backend');
 }
 
 // Get team members
-export async function getTeamMembers(teamId: string): Promise<TeamMember[]> {
+export async function getTeamMembers(_teamId: string): Promise<TeamMember[]> {
   // TODO: Implement when backend supports teams
   throw new Error('Teams not yet supported by backend');
 }
