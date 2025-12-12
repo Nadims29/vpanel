@@ -238,12 +238,12 @@ jobs:
             releases/*.tar.gz
             releases/checksums.txt
 
-  # 部署官网到服务器
+  # 部署官网到服务器（需要配置 DEPLOY_HOST、DEPLOY_USER、DEPLOY_KEY secrets）
   deploy-docs:
     name: Deploy Docs
     runs-on: ubuntu-latest
     needs: docs
-    if: github.repository == 'zsai001/vpanel'
+    if: false  # 暂时禁用，配置好 secrets 后改为: github.repository == 'zsai001/vpanel'
     steps:
       - name: Download docs
         uses: actions/download-artifact@v6
