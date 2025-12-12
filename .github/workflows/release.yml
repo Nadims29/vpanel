@@ -85,6 +85,16 @@ jobs:
           cd web
           npm run build
 
+      - name: Install docs dependencies
+        run: |
+          cd docs
+          npm ci
+
+      - name: Build Docs
+        run: |
+          cd docs
+          npm run build
+
       - name: Package releases
         run: |
           VERSION=${{ steps.version.outputs.VERSION }}
@@ -105,6 +115,10 @@ jobs:
           cp scripts/install.sh vpanel-${VERSION}-linux-arm64/
           cp panel/config.yaml vpanel-${VERSION}-linux-arm64/config.example.yaml
           tar -czvf releases/vpanel-${VERSION}-linux-arm64.tar.gz vpanel-${VERSION}-linux-arm64
+          
+          # Package docs separately for vcloud deployment
+          # 直接打包 dist 目录内容，解压后即为静态文件
+          tar -czvf releases/vpanel-docs.tar.gz -C docs/.vitepress/dist .
           
           # Generate checksums
           cd releases
