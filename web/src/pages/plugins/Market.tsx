@@ -186,7 +186,7 @@ export default function PluginMarket() {
                   placeholder="Search plugins..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  leftIcon={<Search className="w-4 h-4" />}
+                  onClear={() => setSearchQuery('')}
                 />
               </div>
               {categories.length > 0 && (

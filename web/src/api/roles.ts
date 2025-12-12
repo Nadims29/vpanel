@@ -27,25 +27,32 @@ export interface UpdateRoleRequest {
   permissions?: { [key: string]: ('read' | 'write' | 'delete' | 'admin')[] };
 }
 
+type Permission = 'read' | 'write' | 'delete' | 'admin';
+
 // System roles definition
-const SYSTEM_ROLES = [
+const SYSTEM_ROLES: {
+  id: string;
+  name: string;
+  description: string;
+  permissions: { [key: string]: Permission[] };
+}[] = [
   {
     id: 'super_admin',
     name: 'Super Admin',
     description: 'Full system access with all permissions',
-    permissions: { '*': ['read', 'write', 'delete', 'admin'] },
+    permissions: { '*': ['read', 'write', 'delete', 'admin'] as Permission[] },
   },
   {
     id: 'admin',
     name: 'Admin',
     description: 'Administrative access to most features',
     permissions: {
-      'docker.*': ['read', 'write', 'delete'],
-      'nginx.*': ['read', 'write', 'delete'],
-      'database.*': ['read', 'write'],
-      'files.*': ['read', 'write'],
-      'terminal.*': ['read'],
-      'settings.users': ['read'],
+      'docker.*': ['read', 'write', 'delete'] as Permission[],
+      'nginx.*': ['read', 'write', 'delete'] as Permission[],
+      'database.*': ['read', 'write'] as Permission[],
+      'files.*': ['read', 'write'] as Permission[],
+      'terminal.*': ['read'] as Permission[],
+      'settings.users': ['read'] as Permission[],
     },
   },
   {
@@ -53,12 +60,12 @@ const SYSTEM_ROLES = [
     name: 'Operator',
     description: 'Operational access for day-to-day tasks',
     permissions: {
-      'docker.containers': ['read', 'write'],
-      'docker.images': ['read'],
-      'nginx.sites': ['read', 'write'],
-      'files.*': ['read', 'write'],
-      'terminal.access': ['read'],
-      'cron.jobs': ['read', 'write'],
+      'docker.containers': ['read', 'write'] as Permission[],
+      'docker.images': ['read'] as Permission[],
+      'nginx.sites': ['read', 'write'] as Permission[],
+      'files.*': ['read', 'write'] as Permission[],
+      'terminal.access': ['read'] as Permission[],
+      'cron.jobs': ['read', 'write'] as Permission[],
     },
   },
   {
@@ -66,7 +73,7 @@ const SYSTEM_ROLES = [
     name: 'Viewer',
     description: 'Read-only access to view resources',
     permissions: {
-      '*': ['read'],
+      '*': ['read'] as Permission[],
     },
   },
   {

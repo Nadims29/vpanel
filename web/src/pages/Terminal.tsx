@@ -75,7 +75,7 @@ function TerminalPane({ tabId, isActive }: { tabId: string; isActive: boolean })
         setWinPosition: false,
         setWinSizeChars: false,
         setWinSizePixels: false,
-        setWinTitle: false,
+        getWinTitle: false,
       },
     });
 

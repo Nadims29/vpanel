@@ -221,10 +221,12 @@ const storageConfig = {
   azure: { label: 'Azure', color: 'bg-blue-600/10 text-blue-600' },
 };
 
-const dbTypeIcons = {
+const dbTypeIcons: Record<string, string> = {
   mysql: '🐬',
   postgresql: '🐘',
   mongodb: '🍃',
+  redis: '⚡',
+  mariadb: '🦭',
 };
 
 function BackupRow({ backup, onDelete }: { backup: Backup; onDelete: () => void }) {
@@ -339,7 +341,7 @@ function BackupRow({ backup, onDelete }: { backup: Backup; onDelete: () => void 
         title="Delete Backup"
         message={`Are you sure you want to delete "${backup.name}"? This action cannot be undone.`}
         confirmText={deleting ? "Deleting..." : "Delete"}
-        disabled={deleting}
+        loading={deleting}
       />
     </>
   );

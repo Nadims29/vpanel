@@ -264,13 +264,13 @@ export default function SystemSettings() {
                 <Switch 
                   label="Enable Two-Factor Authentication (2FA)" 
                   checked={settings.security.enable_2fa}
-                  onChange={(checked) => updateSetting('security', 'enable_2fa', checked)}
+                  onChange={(e) => updateSetting('security', 'enable_2fa', e.target.checked)}
                   disabled={saving}
                 />
                 <Switch 
                   label="Require 2FA for all users" 
                   checked={settings.security.require_2fa}
-                  onChange={(checked) => updateSetting('security', 'require_2fa', checked)}
+                  onChange={(e) => updateSetting('security', 'require_2fa', e.target.checked)}
                   disabled={saving}
                 />
                 <div className="grid grid-cols-2 gap-4">
@@ -316,7 +316,7 @@ export default function SystemSettings() {
                     </div>
                     <Switch 
                       checked={settings.security.oauth_github_enabled}
-                      onChange={(checked) => updateSetting('security', 'oauth_github_enabled', checked)}
+                      onChange={(e) => updateSetting('security', 'oauth_github_enabled', e.target.checked)}
                       disabled={saving}
                     />
                   </div>
@@ -360,7 +360,7 @@ export default function SystemSettings() {
                     </div>
                     <Switch 
                       checked={settings.security.oauth_google_enabled}
-                      onChange={(checked) => updateSetting('security', 'oauth_google_enabled', checked)}
+                      onChange={(e) => updateSetting('security', 'oauth_google_enabled', e.target.checked)}
                       disabled={saving}
                     />
                   </div>
@@ -424,7 +424,7 @@ export default function SystemSettings() {
                 <Switch 
                   label="Enable email notifications" 
                   checked={settings.notifications.email_enabled}
-                  onChange={(checked) => updateSetting('notifications', 'email_enabled', checked)}
+                  onChange={(e) => updateSetting('notifications', 'email_enabled', e.target.checked)}
                   disabled={saving}
                 />
                 <div className="grid grid-cols-2 gap-4">
@@ -491,37 +491,37 @@ export default function SystemSettings() {
                 <Switch 
                   label="CPU usage alerts" 
                   checked={settings.notifications.cpu_alerts}
-                  onChange={(checked) => updateSetting('notifications', 'cpu_alerts', checked)}
+                  onChange={(e) => updateSetting('notifications', 'cpu_alerts', e.target.checked)}
                   disabled={saving}
                 />
                 <Switch 
                   label="Memory usage alerts" 
                   checked={settings.notifications.memory_alerts}
-                  onChange={(checked) => updateSetting('notifications', 'memory_alerts', checked)}
+                  onChange={(e) => updateSetting('notifications', 'memory_alerts', e.target.checked)}
                   disabled={saving}
                 />
                 <Switch 
                   label="Disk space alerts" 
                   checked={settings.notifications.disk_alerts}
-                  onChange={(checked) => updateSetting('notifications', 'disk_alerts', checked)}
+                  onChange={(e) => updateSetting('notifications', 'disk_alerts', e.target.checked)}
                   disabled={saving}
                 />
                 <Switch 
                   label="Service down alerts" 
                   checked={settings.notifications.service_alerts}
-                  onChange={(checked) => updateSetting('notifications', 'service_alerts', checked)}
+                  onChange={(e) => updateSetting('notifications', 'service_alerts', e.target.checked)}
                   disabled={saving}
                 />
                 <Switch 
                   label="SSL certificate expiry alerts" 
                   checked={settings.notifications.ssl_alerts}
-                  onChange={(checked) => updateSetting('notifications', 'ssl_alerts', checked)}
+                  onChange={(e) => updateSetting('notifications', 'ssl_alerts', e.target.checked)}
                   disabled={saving}
                 />
                 <Switch 
                   label="Security alerts" 
                   checked={settings.notifications.security_alerts}
-                  onChange={(checked) => updateSetting('notifications', 'security_alerts', checked)}
+                  onChange={(e) => updateSetting('notifications', 'security_alerts', e.target.checked)}
                   disabled={saving}
                 />
               </CardContent>
@@ -535,7 +535,7 @@ export default function SystemSettings() {
                 <Switch 
                   label="Enable webhooks" 
                   checked={settings.notifications.webhook_enabled}
-                  onChange={(checked) => updateSetting('notifications', 'webhook_enabled', checked)}
+                  onChange={(e) => updateSetting('notifications', 'webhook_enabled', e.target.checked)}
                   disabled={saving}
                 />
                 <div>
@@ -566,7 +566,7 @@ export default function SystemSettings() {
                 <Switch 
                   label="Enable automatic backups" 
                   checked={settings.backup.auto_backup_enabled}
-                  onChange={(checked) => updateSetting('backup', 'auto_backup_enabled', checked)}
+                  onChange={(e) => updateSetting('backup', 'auto_backup_enabled', e.target.checked)}
                   disabled={saving}
                 />
                 <div className="grid grid-cols-2 gap-4">
@@ -694,14 +694,14 @@ export default function SystemSettings() {
                 <Switch 
                   label="Enable HTTPS" 
                   checked={settings.advanced.enable_https}
-                  onChange={(checked) => updateSetting('advanced', 'enable_https', checked)}
+                  onChange={(e) => updateSetting('advanced', 'enable_https', e.target.checked)}
                   disabled={true}
                   title="HTTPS settings require server restart"
                 />
                 <Switch 
                   label="Enable API rate limiting" 
                   checked={settings.advanced.rate_limit_enabled}
-                  onChange={(checked) => updateSetting('advanced', 'rate_limit_enabled', checked)}
+                  onChange={(e) => updateSetting('advanced', 'rate_limit_enabled', e.target.checked)}
                   disabled={saving}
                 />
               </CardContent>

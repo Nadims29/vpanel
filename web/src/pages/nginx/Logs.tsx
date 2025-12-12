@@ -32,7 +32,7 @@ export default function NginxLogs() {
   const [lines, setLines] = useState(100);
   const [searchQuery, setSearchQuery] = useState('');
   const [autoRefresh, setAutoRefresh] = useState(false);
-  const [autoRefreshInterval, setAutoRefreshInterval] = useState<NodeJS.Timeout | null>(null);
+  const [autoRefreshInterval, setAutoRefreshInterval] = useState<ReturnType<typeof setInterval> | null>(null);
   const logsEndRef = useRef<HTMLDivElement>(null);
 
   // Fetch sites list
@@ -58,9 +58,9 @@ export default function NginxLogs() {
       let logData: { logs: string[] };
 
       if (logType === 'access') {
-        logData = await nginxApi.getAccessLogs(selectedSiteId || undefined, lines);
+        logData = await nginxApi.getAccessLogs(selectedSiteId ? selectedSiteId : '', lines);
       } else {
-        logData = await nginxApi.getErrorLogs(selectedSiteId || undefined, lines);
+        logData = await nginxApi.getErrorLogs(selectedSiteId ? selectedSiteId : '', lines);
       }
 
       setLogs(logData.logs || []);
@@ -359,7 +359,7 @@ export default function NginxLogs() {
                             {parsed.level}
                           </Badge>
                         )}
-                        <span className={cn('flex-1', getLevelColor(parsed.level))}>
+                        <span className={cn('flex-1', getLevelColor(parsed.level || ''))}>
                           {parsed.raw.replace(/^\d{4}\/\d{2}\/\d{2}.*?\[.*?\]\s*/, '')}
                         </span>
                       </div>

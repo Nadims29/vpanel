@@ -46,19 +46,19 @@ import type { DatabaseServer as ApiDatabaseServer, DatabaseType } from '@/api/da
 
 interface DatabaseServer extends ApiDatabaseServer {
   // Extended fields for display (can be computed from API data)
-  version?: string;
-  size?: string;
-  connections?: { active: number; max: number };
-  databases?: number;
-  uptime?: string;
-  cpu?: number;
-  memory?: { used: number; total: number };
-  storage?: { used: number; total: number };
+  version: string;
+  size: string;
+  connections: { active: number; max: number };
+  databases: number;
+  uptime: string;
+  cpu: number;
+  memory: { used: number; total: number };
+  storage: { used: number; total: number };
   lastBackup?: string;
-  isLocal?: boolean;
+  isLocal: boolean;
 }
 
-interface DatabaseInstance {
+interface DisplayDatabaseInstance {
   id: string;
   name: string;
   serverId: string;
@@ -68,19 +68,10 @@ interface DatabaseInstance {
   collation: string;
 }
 
-// Helper function to map API status to display status
-function mapStatus(status: string): 'running' | 'stopped' | 'error' {
-  if (status === 'online') return 'running';
-  if (status === 'offline') return 'stopped';
-  return 'error';
-}
-
 // Helper function to enrich server data with default values for display
 function enrichServer(server: ApiDatabaseServer): DatabaseServer {
-  const mappedStatus = mapStatus(server.status);
   return {
     ...server,
-    status: mappedStatus,
     version: 'Unknown',
     size: '0 GB',
     connections: { active: 0, max: 0 },
@@ -145,8 +136,8 @@ function ServerCard({ server, onSelect, onDelete }: { server: DatabaseServer; on
                 <div className="flex items-center gap-2">
                   <h3 className={cn('font-semibold', isLight ? 'text-gray-900' : 'text-gray-100')}>{server.name}</h3>
                   <StatusDot 
-                    status={server.status === 'running' ? 'online' : server.status === 'stopped' ? 'offline' : 'error'} 
-                    pulse={server.status === 'running'} 
+                    status={server.status === 'online' ? 'online' : server.status === 'offline' ? 'offline' : 'error'} 
+                    pulse={server.status === 'online'} 
                   />
                 </div>
                 <p className={cn('text-sm', isLight ? 'text-gray-500' : 'text-gray-400')}>
@@ -170,7 +161,7 @@ function ServerCard({ server, onSelect, onDelete }: { server: DatabaseServer; on
                 <DropdownItem icon={<Download className="w-4 h-4" />}>Export</DropdownItem>
                 <DropdownItem icon={<Upload className="w-4 h-4" />}>Import</DropdownItem>
                 <DropdownDivider />
-                {server.status === 'running' ? (
+                {server.status === 'online' ? (
                   <DropdownItem icon={<Square className="w-4 h-4" />}>Stop Server</DropdownItem>
                 ) : (
                   <DropdownItem icon={<Play className="w-4 h-4" />}>Start Server</DropdownItem>
@@ -197,7 +188,7 @@ function ServerCard({ server, onSelect, onDelete }: { server: DatabaseServer; on
           </div>
 
           {/* Stats */}
-          {server.status === 'running' ? (
+          {server.status === 'online' ? (
             <div className="space-y-3">
               {/* Quick Stats */}
               <div className="grid grid-cols-3 gap-2">
@@ -229,7 +220,7 @@ function ServerCard({ server, onSelect, onDelete }: { server: DatabaseServer; on
                     {server.memory.used} / {server.memory.total} GB
                   </span>
                 </div>
-                <Progress value={(server.memory.used / server.memory.total) * 100} max={100} size="sm" />
+                <Progress value={server.memory.total > 0 ? (server.memory.used / server.memory.total) * 100 : 0} max={100} size="sm" />
               </div>
               <div>
                 <div className="flex items-center justify-between text-xs mb-1">
@@ -238,7 +229,7 @@ function ServerCard({ server, onSelect, onDelete }: { server: DatabaseServer; on
                     {server.storage.used} / {server.storage.total} GB
                   </span>
                 </div>
-                <Progress value={(server.storage.used / server.storage.total) * 100} max={100} size="sm" />
+                <Progress value={server.storage.total > 0 ? (server.storage.used / server.storage.total) * 100 : 0} max={100} size="sm" />
               </div>
             </div>
           ) : (
@@ -275,7 +266,7 @@ function ServerCard({ server, onSelect, onDelete }: { server: DatabaseServer; on
         title="Remove Database Server"
         message={`Are you sure you want to remove "${server.name}"? This will not delete the actual database data.`}
         confirmText={deleting ? "Removing..." : "Remove"}
-        disabled={deleting}
+        loading={deleting}
       />
     </>
   );
@@ -285,7 +276,7 @@ function DatabaseList({ server }: { server: DatabaseServer }) {
   const resolvedMode = useThemeStore((state) => state.resolvedMode);
   const isLight = resolvedMode === 'light';
   const [search, setSearch] = useState('');
-  const [databases, setDatabases] = useState<DatabaseInstance[]>([]);
+  const [databases, setDatabases] = useState<DisplayDatabaseInstance[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -293,7 +284,17 @@ function DatabaseList({ server }: { server: DatabaseServer }) {
       try {
         setLoading(true);
         const data = await databaseApi.listDatabases(server.id);
-        setDatabases(data);
+        // Convert API data to display format
+        const displayData: DisplayDatabaseInstance[] = data.map(db => ({
+          id: db.id,
+          name: db.name,
+          serverId: db.server_id,
+          size: db.size || '0 B',
+          tables: db.tables || 0,
+          charset: db.charset || 'utf8mb4',
+          collation: db.collation || 'utf8mb4_general_ci',
+        }));
+        setDatabases(displayData);
       } catch (error) {
         console.error('Failed to fetch databases:', error);
         setDatabases([]);
@@ -445,10 +446,10 @@ function ServerDetail({ server, onBack }: { server: DatabaseServer; onBack: () =
                   {server.name}
                 </h1>
                 <StatusDot 
-                  status={server.status === 'running' ? 'online' : 'offline'} 
-                  pulse={server.status === 'running'} 
+                  status={server.status === 'online' ? 'online' : 'offline'} 
+                  pulse={server.status === 'online'} 
                 />
-                <Badge variant={server.status === 'running' ? 'success' : 'gray'}>
+                <Badge variant={server.status === 'online' ? 'success' : 'gray'}>
                   {server.status}
                 </Badge>
               </div>
@@ -461,7 +462,7 @@ function ServerDetail({ server, onBack }: { server: DatabaseServer; onBack: () =
             <Button variant="secondary" leftIcon={<Terminal className="w-4 h-4" />}>
               Console
             </Button>
-            {server.status === 'running' ? (
+            {server.status === 'online' ? (
               <Button variant="secondary" leftIcon={<Square className="w-4 h-4" />}>
                 Stop
               </Button>
@@ -572,7 +573,7 @@ function ServerDetail({ server, onBack }: { server: DatabaseServer; onBack: () =
                 <div className={cn('h-40 rounded-lg flex items-center justify-center', isLight ? 'bg-gray-50' : 'bg-gray-900/50')}>
                   <div className="text-center">
                     <p className={cn('text-4xl font-bold', isLight ? 'text-gray-900' : 'text-gray-100')}>
-                      {((server.memory.used / server.memory.total) * 100).toFixed(0)}%
+                      {server.memory.total > 0 ? ((server.memory.used / server.memory.total) * 100).toFixed(0) : 0}%
                     </p>
                     <p className={cn('text-sm', isLight ? 'text-gray-500' : 'text-gray-400')}>
                       {server.memory.used} / {server.memory.total} GB
@@ -587,10 +588,10 @@ function ServerDetail({ server, onBack }: { server: DatabaseServer; onBack: () =
                 <div className={cn('h-40 rounded-lg flex items-center justify-center', isLight ? 'bg-gray-50' : 'bg-gray-900/50')}>
                   <div className="text-center">
                     <p className={cn('text-4xl font-bold', isLight ? 'text-gray-900' : 'text-gray-100')}>
-                      {server.connections.active}
+                      {server.connections?.active ?? 0}
                     </p>
                     <p className={cn('text-sm', isLight ? 'text-gray-500' : 'text-gray-400')}>
-                      / {server.connections.max} max
+                      / {server.connections?.max ?? 0} max
                     </p>
                   </div>
                 </div>
@@ -602,7 +603,7 @@ function ServerDetail({ server, onBack }: { server: DatabaseServer; onBack: () =
                 <div className={cn('h-40 rounded-lg flex items-center justify-center', isLight ? 'bg-gray-50' : 'bg-gray-900/50')}>
                   <div className="text-center">
                     <p className={cn('text-4xl font-bold', isLight ? 'text-gray-900' : 'text-gray-100')}>
-                      {((server.storage.used / server.storage.total) * 100).toFixed(0)}%
+                      {server.storage.total > 0 ? ((server.storage.used / server.storage.total) * 100).toFixed(0) : 0}%
                     </p>
                     <p className={cn('text-sm', isLight ? 'text-gray-500' : 'text-gray-400')}>
                       {server.storage.used} / {server.storage.total} GB
@@ -643,13 +644,13 @@ function ServerDetail({ server, onBack }: { server: DatabaseServer; onBack: () =
                   <label className={cn('block text-sm font-medium mb-1.5', isLight ? 'text-gray-700' : 'text-gray-300')}>
                     Max Connections
                   </label>
-                  <Input value={server.connections.max.toString()} />
+                  <Input value={(server.connections?.max ?? 0).toString()} />
                 </div>
                 <div>
                   <label className={cn('block text-sm font-medium mb-1.5', isLight ? 'text-gray-700' : 'text-gray-300')}>
                     Memory Limit
                   </label>
-                  <Input value={`${server.memory.total} GB`} />
+                  <Input value={`${server.memory?.total ?? 0} GB`} />
                 </div>
               </div>
             </div>
@@ -747,8 +748,8 @@ export default function DatabaseServers() {
 
   const stats = {
     total: servers.length,
-    running: servers.filter((s) => s.status === 'running').length,
-    stopped: servers.filter((s) => s.status === 'stopped').length,
+    running: servers.filter((s) => s.status === 'online').length,
+    stopped: servers.filter((s) => s.status === 'offline').length,
   };
 
   if (selectedServer) {

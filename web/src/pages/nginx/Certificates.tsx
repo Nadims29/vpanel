@@ -564,7 +564,7 @@ export default function NginxCertificates() {
                   <label className="block text-sm font-medium text-dark-300 mb-1.5">Auto Renew</label>
                   <p className="text-xs text-dark-500">Enable automatic renewal (for Let's Encrypt only)</p>
                 </div>
-                <Switch checked={autoRenew} onChange={setAutoRenew} />
+                <Switch checked={autoRenew} onChange={(e) => setAutoRenew(e.target.checked)} />
               </div>
             </div>
           </TabPanel>

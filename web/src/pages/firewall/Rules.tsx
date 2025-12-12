@@ -571,7 +571,7 @@ export default function FirewallRules() {
         </div>
       )}
 
-      <Tabs defaultValue="rules" onChange={setActiveTab}>
+      <Tabs defaultValue="rules">
         <TabList>
           <Tab value="rules">Firewall Rules</Tab>
           <Tab value="fail2ban">Fail2Ban</Tab>

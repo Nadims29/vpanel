@@ -179,7 +179,7 @@ export default function PluginList() {
                 placeholder="Search plugins..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                leftIcon={<Search className="w-4 h-4" />}
+                onClear={() => setSearchQuery('')}
               />
             </div>
 
@@ -300,7 +300,7 @@ export default function PluginList() {
                               leftIcon={<Settings className="w-4 h-4" />}
                               onClick={() => {
                                 // TODO: Open settings modal
-                                toast.info('Settings feature coming soon');
+                                toast('Settings feature coming soon');
                               }}
                             >
                               Settings
