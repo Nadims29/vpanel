@@ -118,7 +118,7 @@ jobs:
           
           # Package docs separately for vcloud deployment
           # 直接打包 dist 目录内容，解压后即为静态文件
-          tar -czvf releases/vpanel-docs.tar.gz -C docs/.vitepress/dist .
+          tar -czvf releases/vpanel-docs-${VERSION}.tar.gz -C docs/.vitepress/dist .
           
           # Generate checksums
           cd releases
