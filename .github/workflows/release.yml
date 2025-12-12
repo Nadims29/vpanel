@@ -166,62 +166,20 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-  # 构建官网
-  docs:
-    name: Build Docs
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-
-      - name: Get version
-        id: version
-        run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
-
-      - name: Build docs
-        run: |
-          cd docs
-          npm install
-          npm run build
-        env:
-          VITE_VERSION: ${{ steps.version.outputs.VERSION }}
-
-      - name: Upload docs artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: docs
-          path: docs/.vitepress/dist/
-          retention-days: 7
-
   # 创建 GitHub Release
   release:
     name: Create Release
     runs-on: ubuntu-latest
-    needs: [build, docker, docs]
+    needs: [build, docker]
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
       - name: Download releases
-        uses: actions/download-artifact@v6
+        uses: actions/download-artifact@v4
         with:
           name: releases
           path: releases/
-
-      - name: Download docs
-        uses: actions/download-artifact@v6
-        with:
-          name: docs
-          path: docs-dist/
-
-      - name: Package docs
-        run: |
-          tar -czvf releases/vpanel-docs.tar.gz -C docs-dist .
 
       - name: Get version
         id: version
@@ -237,39 +195,6 @@ jobs:
           files: |
             releases/*.tar.gz
             releases/checksums.txt
-
-  # 部署官网到服务器（需要配置 DEPLOY_HOST、DEPLOY_USER、DEPLOY_KEY secrets）
-  deploy-docs:
-    name: Deploy Docs
-    runs-on: ubuntu-latest
-    needs: docs
-    if: false  # 暂时禁用，配置好 secrets 后改为: github.repository == 'zsai001/vpanel'
-    steps:
-      - name: Download docs
-        uses: actions/download-artifact@v6
-        with:
-          name: docs
-          path: docs-dist/
-
-      - name: Deploy to server
-        uses: appleboy/scp-action@v0.1.7
-        with:
-          host: ${{ secrets.DEPLOY_HOST }}
-          username: ${{ secrets.DEPLOY_USER }}
-          key: ${{ secrets.DEPLOY_KEY }}
-          source: "docs-dist/*"
-          target: "/opt/vpanel-docs/html"
-          strip_components: 1
-
-      - name: Restart docs container
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.DEPLOY_HOST }}
-          username: ${{ secrets.DEPLOY_USER }}
-          key: ${{ secrets.DEPLOY_KEY }}
-          script: |
-            cd /opt/vpanel-docs
-            docker compose restart || docker compose up -d
 
   # 通知 VCloud 更新
   notify-vcloud:
