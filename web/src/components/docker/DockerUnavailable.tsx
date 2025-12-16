@@ -97,17 +97,15 @@ export function DockerUnavailable({ error, loading, onRetry }: DockerUnavailable
             )}
             {loading ? 'Checking...' : 'Retry Connection'}
           </Button>
-          <Button
-            variant="outline"
-            as="a"
+          <a
             href="https://docs.docker.com/get-docker/"
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex items-center gap-2"
+            className="inline-flex items-center gap-2 px-4 py-2 bg-transparent border border-dark-600 text-dark-300 hover:bg-dark-800 hover:text-dark-100 rounded-lg font-medium transition-all duration-200"
           >
             <ExternalLink className="w-4 h-4" />
             Docker Installation Guide
-          </Button>
+          </a>
         </div>
 
         <div className="mt-8 p-4 bg-blue-500/10 border border-blue-500/20 rounded-lg">

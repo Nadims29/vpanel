@@ -6,14 +6,14 @@
   <p><strong>Open Source · Programmable · Enterprise Ready</strong></p>
   
   <p>
-    <a href="https://github.com/zsoft-vpanel/vpanel/blob/main/LICENSE">
+    <a href="https://github.com/zsai001/vpanel/blob/main/LICENSE">
       <img src="https://img.shields.io/badge/license-Apache%202.0-blue.svg" alt="License">
     </a>
-    <a href="https://github.com/zsoft-vpanel/vpanel/releases">
-      <img src="https://img.shields.io/github/v/release/zsoft-vpanel/vpanel" alt="Release">
+    <a href="https://github.com/zsai001/vpanel/releases">
+      <img src="https://img.shields.io/github/v/release/zsai001/vpanel" alt="Release">
     </a>
-    <a href="https://github.com/zsoft-vpanel/vpanel/stargazers">
-      <img src="https://img.shields.io/github/stars/zsoft-vpanel/vpanel?style=social" alt="GitHub stars">
+    <a href="https://github.com/zsai001/vpanel/stargazers">
+      <img src="https://img.shields.io/github/stars/zsai001/vpanel?style=social" alt="GitHub stars">
     </a>
   </p>
 </div>
@@ -132,14 +132,14 @@ We handle monitoring, alerting, backups, diagnostics, and recovery — keeping y
 ### One-Click Installation
 
 ```bash
-curl -sSL https://vpanel.zsoft.cc | bash
+curl -sSL https://vpanel.zsoft.cc/install.sh | bash
 ```
 
 ### Development Environment
 
 ```bash
 # Clone repository
-git clone https://github.com/zsoft-vpanel/vpanel.git
+git clone https://github.com/zsai001/vpanel.git
 cd vpanel
 
 # Start development (backend + frontend)
@@ -206,11 +206,11 @@ Apache License 2.0
 ## ⭐ Star History
 
 <div align="center">
-  <a href="https://star-history.com/#zsoft-vpanel/vpanel&Date">
+  <a href="https://star-history.com/#zsai001/vpanel&Date">
     <picture>
-      <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=zsoft-vpanel/vpanel&type=Date&theme=dark" />
-      <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=zsoft-vpanel/vpanel&type=Date" />
-      <img src="https://api.star-history.com/svg?repos=zsoft-vpanel/vpanel&type=Date" alt="Star History Chart" />
+      <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=zsai001/vpanel&type=Date&theme=dark" />
+      <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=zsai001/vpanel&type=Date" />
+      <img src="https://api.star-history.com/svg?repos=zsai001/vpanel&type=Date" alt="Star History Chart" />
     </picture>
   </a>
 </div>

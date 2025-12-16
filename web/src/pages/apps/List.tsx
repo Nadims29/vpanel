@@ -43,11 +43,11 @@ function AppCard({
   const [showDelete, setShowDelete] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
-  const statusColors: Record<string, 'success' | 'gray' | 'warning' | 'info' | 'error'> = {
+  const statusColors: Record<string, 'success' | 'gray' | 'warning' | 'info' | 'danger'> = {
     running: 'success',
     stopped: 'gray',
     building: 'warning',
-    failed: 'error',
+    failed: 'danger',
   };
 
   const handleAction = async (action: string) => {
@@ -143,7 +143,7 @@ function AppCard({
               <DropdownDivider />
               <DropdownItem
                 icon={<Trash2 className="w-4 h-4" />}
-                variant="danger"
+                danger
                 onClick={() => setShowDelete(true)}
               >
                 Delete
@@ -200,7 +200,7 @@ function AppCard({
         title="Delete App"
         message={`Are you sure you want to delete "${app.name}"? This will stop and remove the container, image, and all deployment history.`}
         confirmText="Delete"
-        variant="danger"
+        type="danger"
       />
     </>
   );
@@ -208,7 +208,7 @@ function AppCard({
 
 export default function AppsList() {
   const navigate = useNavigate();
-  const { isAvailable, isLoading: dockerLoading } = useDockerStatus();
+  const { available: isAvailable, loading: dockerLoading, refetch } = useDockerStatus();
   const [apps, setApps] = useState<App[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -275,7 +275,7 @@ export default function AppsList() {
   }
 
   if (!isAvailable) {
-    return <DockerUnavailable />;
+    return <DockerUnavailable onRetry={refetch} />;
   }
 
   return (
@@ -302,7 +302,7 @@ export default function AppsList() {
       <Card className="p-4">
         <SearchInput
           value={search}
-          onChange={setSearch}
+          onChange={(e) => setSearch(e.target.value)}
           placeholder="Search apps..."
         />
       </Card>

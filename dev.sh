@@ -162,7 +162,18 @@ lint() {
     log_info "Linting TypeScript..."
     cd web && npm run lint
     cd ..
+    log_info "Type checking TypeScript..."
+    cd web && npm run typecheck
+    cd ..
     log_success "Linting completed"
+}
+
+# 类型检查
+typecheck() {
+    log_info "Type checking TypeScript..."
+    cd web && npm run typecheck
+    cd ..
+    log_success "Type check completed"
 }
 
 # 清理构建产物
@@ -249,7 +260,8 @@ show_help() {
     echo "  test:server   仅运行后端测试"
     echo "  test:web      仅运行前端测试"
     echo "  test:cov      运行测试并生成覆盖率报告"
-    echo "  lint          运行代码检查"
+    echo "  lint          运行代码检查（包含类型检查）"
+    echo "  typecheck     仅运行 TypeScript 类型检查"
     echo ""
     echo "其他命令:"
     echo "  deps          安装依赖"
@@ -310,6 +322,9 @@ case "${1:-help}" in
         ;;
     lint)
         lint
+        ;;
+    typecheck)
+        typecheck
         ;;
     deps)
         deps

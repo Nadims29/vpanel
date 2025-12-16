@@ -46,9 +46,9 @@ function DeploymentItem({ deployment, isActive }: { deployment: AppDeployment; i
     deploying: <Loader2 className="w-4 h-4 text-purple-400 animate-spin" />,
   };
 
-  const statusColors: Record<string, 'success' | 'error' | 'warning' | 'info' | 'gray'> = {
+  const statusColors: Record<string, 'success' | 'danger' | 'warning' | 'info' | 'gray'> = {
     success: 'success',
-    failed: 'error',
+    failed: 'danger',
     pending: 'warning',
     cloning: 'info',
     building: 'warning',
@@ -255,11 +255,11 @@ export default function AppDetail() {
     }
   };
 
-  const statusColors: Record<string, 'success' | 'gray' | 'warning' | 'error'> = {
+  const statusColors: Record<string, 'success' | 'gray' | 'warning' | 'danger'> = {
     running: 'success',
     stopped: 'gray',
     building: 'warning',
-    failed: 'error',
+    failed: 'danger',
   };
 
   if (loading) {
@@ -571,7 +571,7 @@ export default function AppDetail() {
         title="Delete App"
         message={`Are you sure you want to delete "${app.name}"? This will stop and remove the container, image, and all deployment history. This action cannot be undone.`}
         confirmText="Delete"
-        variant="danger"
+        type="danger"
       />
     </div>
   );
