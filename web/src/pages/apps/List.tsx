@@ -29,8 +29,6 @@ import {
 import toast from 'react-hot-toast';
 import * as appsApi from '@/api/apps';
 import type { App } from '@/api/apps';
-import { useDockerStatus } from '@/hooks/useDockerStatus';
-import { DockerUnavailable } from '@/components/docker/DockerUnavailable';
 
 function AppCard({
   app,
@@ -208,7 +206,6 @@ function AppCard({
 
 export default function AppsList() {
   const navigate = useNavigate();
-  const { available: isAvailable, loading: dockerLoading, refetch } = useDockerStatus();
   const [apps, setApps] = useState<App[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -217,18 +214,17 @@ export default function AppsList() {
     try {
       const data = await appsApi.listApps();
       setApps(data);
-    } catch (error) {
-      toast.error('Failed to load apps');
+    } catch {
+      // Silently handle error when Docker/service is unavailable
+      setApps([]);
     } finally {
       setLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    if (isAvailable) {
-      loadApps();
-    }
-  }, [isAvailable, loadApps]);
+    loadApps();
+  }, [loadApps]);
 
   const handleAction = async (action: string, app: App) => {
     try {
@@ -266,16 +262,12 @@ export default function AppsList() {
     app.git_url.toLowerCase().includes(search.toLowerCase())
   );
 
-  if (dockerLoading) {
+  if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
         <Spinner size="lg" />
       </div>
     );
-  }
-
-  if (!isAvailable) {
-    return <DockerUnavailable onRetry={refetch} />;
   }
 
   return (

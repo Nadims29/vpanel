@@ -60,7 +60,7 @@ func NewContainer(db *gorm.DB, cfg *config.Config, log *logger.Logger) *Containe
 	c.File = NewFileService(db, cfg, log)
 	c.Terminal = NewTerminalService(log)
 	c.Cron = NewCronService(db, log)
-	c.Firewall = NewFirewallService(db, log)
+	c.Firewall = NewFirewallService(db, log, cfg.Server.Port)
 	c.Software = NewSoftwareService(db, log)
 	c.Apps = NewAppsService(db, log, c.Docker, c.Nginx)
 
@@ -136,11 +136,11 @@ type FirewallService struct {
 }
 
 // NewFirewallService creates a new firewall service
-func NewFirewallService(db *gorm.DB, log *logger.Logger) *FirewallService {
+func NewFirewallService(db *gorm.DB, log *logger.Logger, vpanelPort int) *FirewallService {
 	return &FirewallService{
 		db:      db,
 		log:     log,
-		manager: NewFirewallManager(db, log),
+		manager: NewFirewallManager(db, log, vpanelPort),
 	}
 }
 

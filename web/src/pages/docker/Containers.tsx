@@ -43,8 +43,6 @@ import { cn } from '@/utils/cn';
 import toast from 'react-hot-toast';
 import * as dockerApi from '@/api/docker';
 import type { Container, CreateContainerRequest } from '@/api/docker';
-import { useDockerStatus } from '@/hooks/useDockerStatus';
-import { DockerUnavailable } from '@/components/docker/DockerUnavailable';
 
 function ContainerCard({ 
   container, 
@@ -253,7 +251,6 @@ function ContainerCard({
 }
 
 export default function DockerContainers() {
-  const dockerStatus = useDockerStatus();
   const [containers, setContainers] = useState<Container[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -286,9 +283,9 @@ export default function DockerContainers() {
     try {
       const data = await dockerApi.listContainers(true);
       setContainers(data);
-    } catch (error) {
-      console.error('Failed to fetch containers:', error);
-      toast.error(error instanceof Error ? error.message : 'Failed to fetch containers');
+    } catch {
+      // Silently handle error when Docker is unavailable
+      setContainers([]);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -417,18 +414,7 @@ export default function DockerContainers() {
     return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
   };
 
-  // Show Docker unavailable screen if Docker is not connected
-  if (!dockerStatus.loading && !dockerStatus.available) {
-    return (
-      <DockerUnavailable
-        error={dockerStatus.error}
-        loading={dockerStatus.loading}
-        onRetry={dockerStatus.refetch}
-      />
-    );
-  }
-
-  if (loading || dockerStatus.loading) {
+  if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
         <Spinner size="lg" />

@@ -25,17 +25,22 @@ const (
 
 // FirewallManager handles real firewall operations
 type FirewallManager struct {
-	db      *gorm.DB
-	log     *logger.Logger
-	backend FirewallBackend
-	mu      sync.Mutex
+	db         *gorm.DB
+	log        *logger.Logger
+	backend    FirewallBackend
+	mu         sync.Mutex
+	vpanelPort int // VPanel server port to allow
 }
 
 // NewFirewallManager creates a new firewall manager
-func NewFirewallManager(db *gorm.DB, log *logger.Logger) *FirewallManager {
+func NewFirewallManager(db *gorm.DB, log *logger.Logger, vpanelPort int) *FirewallManager {
+	if vpanelPort <= 0 {
+		vpanelPort = 8080 // default VPanel port
+	}
 	fm := &FirewallManager{
-		db:  db,
-		log: log,
+		db:         db,
+		log:        log,
+		vpanelPort: vpanelPort,
 	}
 	fm.detectBackend()
 	return fm
@@ -60,6 +65,23 @@ func (fm *FirewallManager) detectBackend() {
 	fm.backend = FirewallBackendNone
 	fm.log.Warn("No firewall backend detected")
 }
+
+// getSSHPort reads the SSH port from sshd_config, defaults to 22
+func (fm *FirewallManager) getSSHPort() int {
+	// Try to read from sshd_config
+	content, err := exec.Command("grep", "-E", "^Port\\s+", "/etc/ssh/sshd_config").Output()
+	if err == nil {
+		line := strings.TrimSpace(string(content))
+		parts := strings.Fields(line)
+		if len(parts) >= 2 {
+			if port, err := strconv.Atoi(parts[1]); err == nil && port > 0 {
+				return port
+			}
+		}
+	}
+	return 22 // default SSH port
+}
+
 
 // GetBackend returns the detected firewall backend
 func (fm *FirewallManager) GetBackend() FirewallBackend {
@@ -162,6 +184,12 @@ func (fm *FirewallManager) EnableFirewall() error {
 	fm.mu.Lock()
 	defer fm.mu.Unlock()
 
+	// IMPORTANT: Allow essential ports BEFORE enabling firewall to prevent lockout
+	fm.log.Info("Allowing essential ports before enabling firewall...")
+	if err := fm.allowEssentialPortsLocked(); err != nil {
+		fm.log.Warn("Failed to allow some essential ports", "error", err)
+	}
+
 	switch fm.backend {
 	case FirewallBackendUFW:
 		// Enable UFW with default deny
@@ -173,23 +201,66 @@ func (fm *FirewallManager) EnableFirewall() error {
 		return nil
 
 	case FirewallBackendIPTables:
-		// For iptables, we set default policy to DROP for INPUT
-		cmd := exec.Command("sudo", "iptables", "-P", "INPUT", "DROP")
-		if err := cmd.Run(); err != nil {
-			return fmt.Errorf("failed to set iptables INPUT policy: %w", err)
-		}
-		// Allow established connections
-		cmd = exec.Command("sudo", "iptables", "-A", "INPUT", "-m", "state", "--state", "ESTABLISHED,RELATED", "-j", "ACCEPT")
+		// Allow established connections first
+		cmd := exec.Command("sudo", "iptables", "-A", "INPUT", "-m", "state", "--state", "ESTABLISHED,RELATED", "-j", "ACCEPT")
 		cmd.Run() // Ignore error if rule exists
 		// Allow loopback
 		cmd = exec.Command("sudo", "iptables", "-A", "INPUT", "-i", "lo", "-j", "ACCEPT")
 		cmd.Run() // Ignore error if rule exists
+		// For iptables, we set default policy to DROP for INPUT (do this LAST)
+		cmd = exec.Command("sudo", "iptables", "-P", "INPUT", "DROP")
+		if err := cmd.Run(); err != nil {
+			return fmt.Errorf("failed to set iptables INPUT policy: %w", err)
+		}
 		fm.log.Info("iptables firewall enabled")
 		return nil
 
 	default:
 		return fmt.Errorf("no firewall backend available")
 	}
+}
+
+// allowEssentialPortsLocked allows SSH and VPanel ports (must be called with lock held)
+func (fm *FirewallManager) allowEssentialPortsLocked() error {
+	sshPort := fm.getSSHPort()
+
+	switch fm.backend {
+	case FirewallBackendUFW:
+		// Allow SSH port
+		cmd := exec.Command("sudo", "ufw", "allow", strconv.Itoa(sshPort)+"/tcp", "comment", "vpanel:ssh")
+		if err := cmd.Run(); err != nil {
+			fm.log.Warn("Failed to allow SSH port", "port", sshPort, "error", err)
+		} else {
+			fm.log.Info("Allowed SSH port", "port", sshPort)
+		}
+
+		// Allow VPanel port
+		cmd = exec.Command("sudo", "ufw", "allow", strconv.Itoa(fm.vpanelPort)+"/tcp", "comment", "vpanel:panel")
+		if err := cmd.Run(); err != nil {
+			fm.log.Warn("Failed to allow VPanel port", "port", fm.vpanelPort, "error", err)
+		} else {
+			fm.log.Info("Allowed VPanel port", "port", fm.vpanelPort)
+		}
+
+	case FirewallBackendIPTables:
+		// Allow SSH port
+		cmd := exec.Command("sudo", "iptables", "-I", "INPUT", "1", "-p", "tcp", "--dport", strconv.Itoa(sshPort), "-j", "ACCEPT", "-m", "comment", "--comment", "vpanel:ssh")
+		if err := cmd.Run(); err != nil {
+			fm.log.Warn("Failed to allow SSH port", "port", sshPort, "error", err)
+		} else {
+			fm.log.Info("Allowed SSH port", "port", sshPort)
+		}
+
+		// Allow VPanel port
+		cmd = exec.Command("sudo", "iptables", "-I", "INPUT", "1", "-p", "tcp", "--dport", strconv.Itoa(fm.vpanelPort), "-j", "ACCEPT", "-m", "comment", "--comment", "vpanel:panel")
+		if err := cmd.Run(); err != nil {
+			fm.log.Warn("Failed to allow VPanel port", "port", fm.vpanelPort, "error", err)
+		} else {
+			fm.log.Info("Allowed VPanel port", "port", fm.vpanelPort)
+		}
+	}
+
+	return nil
 }
 
 // DisableFirewall disables the firewall
