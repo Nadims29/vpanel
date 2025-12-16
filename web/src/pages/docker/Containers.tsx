@@ -43,6 +43,8 @@ import { cn } from '@/utils/cn';
 import toast from 'react-hot-toast';
 import * as dockerApi from '@/api/docker';
 import type { Container, CreateContainerRequest } from '@/api/docker';
+import { useDockerStatus } from '@/hooks/useDockerStatus';
+import { DockerUnavailable } from '@/components/docker/DockerUnavailable';
 
 function ContainerCard({ 
   container, 
@@ -174,8 +176,8 @@ function ContainerCard({
           <div className="flex items-center gap-2 mb-4">
             <Network className="w-4 h-4 text-dark-500 flex-shrink-0" />
             <div className="flex flex-wrap gap-1">
-              {container.ports.slice(0, 3).map((port) => (
-                <span key={port} className="px-2 py-0.5 bg-dark-700 rounded text-xs text-dark-300 font-mono">
+              {container.ports.slice(0, 3).map((port, index) => (
+                <span key={`${index}-${port}`} className="px-2 py-0.5 bg-dark-700 rounded text-xs text-dark-300 font-mono">
                   {port}
                 </span>
               ))}
@@ -251,6 +253,7 @@ function ContainerCard({
 }
 
 export default function DockerContainers() {
+  const dockerStatus = useDockerStatus();
   const [containers, setContainers] = useState<Container[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -414,7 +417,18 @@ export default function DockerContainers() {
     return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
   };
 
-  if (loading) {
+  // Show Docker unavailable screen if Docker is not connected
+  if (!dockerStatus.loading && !dockerStatus.available) {
+    return (
+      <DockerUnavailable
+        error={dockerStatus.error}
+        loading={dockerStatus.loading}
+        onRetry={dockerStatus.refetch}
+      />
+    );
+  }
+
+  if (loading || dockerStatus.loading) {
     return (
       <div className="flex items-center justify-center h-64">
         <Spinner size="lg" />
@@ -604,8 +618,8 @@ export default function DockerContainers() {
                     <TableCell>
                       {container.ports && container.ports.length > 0 ? (
                         <div className="flex flex-wrap gap-1">
-                          {container.ports.slice(0, 2).map((port) => (
-                            <span key={port} className="px-2 py-0.5 bg-dark-700 rounded text-xs text-dark-300 font-mono">
+                          {container.ports.slice(0, 2).map((port, index) => (
+                            <span key={`${index}-${port}`} className="px-2 py-0.5 bg-dark-700 rounded text-xs text-dark-300 font-mono">
                               {port}
                             </span>
                           ))}

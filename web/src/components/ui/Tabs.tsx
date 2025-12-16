@@ -99,12 +99,22 @@ export function Tab({ value, children, icon, active, onClick }: TabProps) {
   );
 }
 
+export interface TabPanelsProps {
+  children: ReactNode;
+  className?: string;
+}
+
+export function TabPanels({ children, className }: TabPanelsProps) {
+  return <div className={className}>{children}</div>;
+}
+
 export interface TabPanelProps {
   value: string;
   children: ReactNode;
+  className?: string;
 }
 
-export function TabPanel({ value, children }: TabPanelProps) {
+export function TabPanel({ value, children, className }: TabPanelProps) {
   const context = useContext(TabsContext);
   if (!context) throw new Error('TabPanel must be used within Tabs');
 
@@ -115,6 +125,7 @@ export function TabPanel({ value, children }: TabPanelProps) {
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.2 }}
+      className={className}
     >
       {children}
     </motion.div>

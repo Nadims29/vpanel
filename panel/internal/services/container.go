@@ -30,6 +30,7 @@ type Container struct {
 	Cron     *CronService
 	Firewall *FirewallService
 	Software *SoftwareService
+	Apps     *AppsService
 
 	// Support services
 	Plugin       *PluginService
@@ -55,12 +56,13 @@ func NewContainer(db *gorm.DB, cfg *config.Config, log *logger.Logger) *Containe
 	// Initialize feature services
 	c.Docker = NewDockerService(db, log)
 	c.Nginx = NewNginxService(db, log)
-	c.Database = NewDatabaseService(db, log)
+	c.Database = NewDatabaseService(db, log, c.Docker)
 	c.File = NewFileService(db, cfg, log)
 	c.Terminal = NewTerminalService(log)
 	c.Cron = NewCronService(db, log)
 	c.Firewall = NewFirewallService(db, log)
 	c.Software = NewSoftwareService(db, log)
+	c.Apps = NewAppsService(db, log, c.Docker, c.Nginx)
 
 	// Initialize support services
 	c.Plugin = NewPluginService(db, log)
@@ -112,13 +114,14 @@ func NewNodeService(db *gorm.DB, log *logger.Logger) *NodeService {
 
 // DatabaseService manages database servers
 type DatabaseService struct {
-	db  *gorm.DB
-	log *logger.Logger
+	db     *gorm.DB
+	log    *logger.Logger
+	docker *DockerService
 }
 
 // NewDatabaseService creates a new database service
-func NewDatabaseService(db *gorm.DB, log *logger.Logger) *DatabaseService {
-	return &DatabaseService{db: db, log: log}
+func NewDatabaseService(db *gorm.DB, log *logger.Logger, docker *DockerService) *DatabaseService {
+	return &DatabaseService{db: db, log: log, docker: docker}
 }
 
 // ============================================

@@ -13,6 +13,10 @@ import DockerImages from '@/pages/docker/Images';
 import DockerNetworks from '@/pages/docker/Networks';
 import DockerVolumes from '@/pages/docker/Volumes';
 import DockerCompose from '@/pages/docker/Compose';
+import AppsList from '@/pages/apps/List';
+import AppsCreate from '@/pages/apps/Create';
+import AppsDetail from '@/pages/apps/Detail';
+import NginxInstances from '@/pages/nginx/Instances';
 import NginxSites from '@/pages/nginx/Sites';
 import NginxCertificates from '@/pages/nginx/Certificates';
 import NginxLogs from '@/pages/nginx/Logs';
@@ -25,6 +29,7 @@ import FirewallRules from '@/pages/firewall/Rules';
 import SoftwareList from '@/pages/software/List';
 import PluginList from '@/pages/plugins/List';
 import PluginMarket from '@/pages/plugins/Market';
+import PluginPage from '@/pages/plugins/PluginPage';
 import Users from '@/pages/settings/Users';
 import Roles from '@/pages/settings/Roles';
 import Teams from '@/pages/settings/Teams';
@@ -74,7 +79,13 @@ function App() {
         <Route path="/docker/volumes" element={<DockerVolumes />} />
         <Route path="/docker/compose" element={<DockerCompose />} />
 
+        {/* Apps */}
+        <Route path="/apps" element={<AppsList />} />
+        <Route path="/apps/create" element={<AppsCreate />} />
+        <Route path="/apps/:id" element={<AppsDetail />} />
+
         {/* Nginx */}
+        <Route path="/nginx/instances" element={<NginxInstances />} />
         <Route path="/nginx/sites" element={<NginxSites />} />
         <Route path="/nginx/certificates" element={<NginxCertificates />} />
         <Route path="/nginx/logs" element={<NginxLogs />} />
@@ -101,6 +112,7 @@ function App() {
         {/* Plugins */}
         <Route path="/plugins" element={<PluginList />} />
         <Route path="/plugins/market" element={<PluginMarket />} />
+        <Route path="/plugins/:pluginId/*" element={<PluginPage />} />
 
         {/* Settings */}
         <Route path="/settings/users" element={<Users />} />

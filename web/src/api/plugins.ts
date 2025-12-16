@@ -52,6 +52,30 @@ export interface InstallPluginRequest {
   path?: string;
 }
 
+export interface PluginMenuItem {
+  id?: string;
+  title: string;
+  icon: string;
+  path: string;
+  order?: number;
+  parent?: string;
+  children?: PluginMenuItem[];
+  badge?: string;
+  badge_variant?: string;
+}
+
+export interface PluginMenuResponse {
+  plugin_id: string;
+  menus: PluginMenuItem[];
+}
+
+export interface PluginPage {
+  plugin_id: string;
+  path: string;
+  title: string;
+  iframe_src: string;
+}
+
 // List all installed plugins
 export async function listPlugins(): Promise<Plugin[]> {
   return get<Plugin[]>('/plugins');
@@ -93,4 +117,14 @@ export async function updatePluginSettings(
   settings: Record<string, unknown>
 ): Promise<void> {
   return put<void>(`/plugins/${id}/settings`, { settings });
+}
+
+// Get plugin menus for sidebar
+export async function getPluginMenus(): Promise<PluginMenuResponse[]> {
+  return get<PluginMenuResponse[]>('/plugins/menus');
+}
+
+// Get plugin pages for routing
+export async function getPluginPages(): Promise<PluginPage[]> {
+  return get<PluginPage[]>('/plugins/pages');
 }

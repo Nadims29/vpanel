@@ -6,6 +6,7 @@ import {
   Search,
   FileText,
   AlertCircle,
+  AlertTriangle,
 } from 'lucide-react';
 import {
   Button,
@@ -21,7 +22,7 @@ import {
 import { cn } from '@/utils/cn';
 import toast from 'react-hot-toast';
 import * as nginxApi from '@/api/nginx';
-import type { NginxSite } from '@/api/nginx';
+import type { NginxSite, NginxStatus } from '@/api/nginx';
 
 export default function NginxLogs() {
   const [logType, setLogType] = useState<'access' | 'error'>('access');
@@ -34,6 +35,25 @@ export default function NginxLogs() {
   const [autoRefresh, setAutoRefresh] = useState(false);
   const [autoRefreshInterval, setAutoRefreshInterval] = useState<ReturnType<typeof setInterval> | null>(null);
   const logsEndRef = useRef<HTMLDivElement>(null);
+  const [nginxStatus, setNginxStatus] = useState<NginxStatus | null>(null);
+  const [statusLoading, setStatusLoading] = useState(true);
+
+  // Fetch nginx status
+  const fetchStatus = useCallback(async () => {
+    try {
+      setStatusLoading(true);
+      const status = await nginxApi.getNginxStatus();
+      setNginxStatus(status);
+    } catch (error) {
+      console.error('Failed to fetch nginx status:', error);
+    } finally {
+      setStatusLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchStatus();
+  }, [fetchStatus]);
 
   // Fetch sites list
   const fetchSites = useCallback(async () => {
@@ -46,8 +66,10 @@ export default function NginxLogs() {
   }, []);
 
   useEffect(() => {
-    fetchSites();
-  }, [fetchSites]);
+    if (nginxStatus?.installed) {
+      fetchSites();
+    }
+  }, [fetchSites, nginxStatus?.installed]);
 
   // Fetch logs
   const fetchLogs = useCallback(async () => {
@@ -179,6 +201,58 @@ export default function NginxLogs() {
   };
 
   const selectedSite = sites.find((s) => s.id === selectedSiteId);
+
+  // Show loading state while checking nginx status
+  if (statusLoading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Spinner />
+      </div>
+    );
+  }
+
+  // Show install prompt if nginx is not installed
+  if (nginxStatus && !nginxStatus.installed) {
+    const getInstallCommand = () => {
+      switch (nginxStatus.os) {
+        case 'darwin':
+          return 'brew install nginx';
+        case 'linux':
+          return 'sudo apt install nginx  # 或 sudo yum install nginx';
+        default:
+          return 'brew install nginx';
+      }
+    };
+
+    return (
+      <div>
+        <div className="mb-6">
+          <h1 className="text-2xl font-semibold text-dark-100">Nginx Logs</h1>
+          <p className="text-dark-400">View access and error logs</p>
+        </div>
+        <Card padding className="text-center py-12">
+          <div className="flex flex-col items-center gap-4">
+            <div className="w-16 h-16 rounded-full bg-yellow-500/10 flex items-center justify-center">
+              <AlertTriangle className="w-8 h-8 text-yellow-500" />
+            </div>
+            <div>
+              <h2 className="text-xl font-semibold text-dark-100 mb-2">Nginx 未安装</h2>
+              <p className="text-dark-400 max-w-md mx-auto mb-4">
+                要查看日志，您需要先安装 Nginx。请在终端中运行以下命令安装：
+              </p>
+              <div className="bg-dark-900 rounded-lg p-4 font-mono text-sm text-dark-200 mb-4">
+                <code>{getInstallCommand()}</code>
+              </div>
+              <Button variant="secondary" onClick={fetchStatus}>
+                <RefreshCw className="w-4 h-4 mr-2" />
+                重新检查
+              </Button>
+            </div>
+          </div>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div>

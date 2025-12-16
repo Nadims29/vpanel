@@ -259,25 +259,27 @@ export default function Dashboard() {
 
   const fetchData = useCallback(async () => {
     try {
-      const [overviewData, metricsData] = await Promise.all([
-        dashboardApi.getDashboardOverview(),
-        dashboardApi.getSystemMetrics(),
-      ]);
+      // Overview API already includes metrics, no need for separate call
+      const overviewData = await dashboardApi.getDashboardOverview();
       
       setOverview(overviewData);
-      setMetrics(metricsData);
+      // Use metrics from overview response
+      const metricsData = overviewData.metrics;
+      if (metricsData) {
+        setMetrics(metricsData);
 
-      // Add to history
-      const now = new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
-      setMetricsHistory(prev => {
-        const newHistory = [...prev, {
-          time: now,
-          cpu: metricsData.cpu.usage_percent,
-          memory: metricsData.memory.used_percent,
-        }];
-        // Keep last 12 data points
-        return newHistory.slice(-12);
-      });
+        // Add to history
+        const now = new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+        setMetricsHistory(prev => {
+          const newHistory = [...prev, {
+            time: now,
+            cpu: metricsData.cpu.usage_percent,
+            memory: metricsData.memory.used_percent,
+          }];
+          // Keep last 12 data points
+          return newHistory.slice(-12);
+        });
+      }
     } catch (error) {
       console.error('Failed to fetch dashboard data:', error);
       if (!loading) {

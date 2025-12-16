@@ -11,11 +11,15 @@ export interface DatabaseServer {
   port: number;
   username: string;
   status: 'online' | 'offline' | 'error' | 'unknown';
+  container_id?: string;
+  is_local?: boolean;
   created_at?: string;
   updated_at?: string;
 }
 
-export interface CreateDatabaseServerRequest {
+// Request for connecting to an existing database server
+export interface ConnectDatabaseServerRequest {
+  mode: 'connect';
   name: string;
   type: DatabaseType;
   host: string;
@@ -23,6 +27,44 @@ export interface CreateDatabaseServerRequest {
   username: string;
   password: string;
   node_id?: string;
+}
+
+// Request for creating a local database server using Docker
+export interface CreateLocalDatabaseServerRequest {
+  mode: 'create';
+  name: string;
+  type: DatabaseType;
+  port?: number;
+  root_password: string;
+  version?: string;
+}
+
+export type CreateDatabaseServerRequest = ConnectDatabaseServerRequest | CreateLocalDatabaseServerRequest;
+
+// Deploy task for tracking deployment progress
+export interface DeployTaskStep {
+  name: string;
+  status: 'pending' | 'running' | 'completed' | 'failed';
+  progress: number;
+}
+
+export interface DeployTask {
+  id: string;
+  name: string;
+  type: DatabaseType;
+  status: 'pending' | 'running' | 'completed' | 'failed';
+  progress: number;
+  current_step: string;
+  steps?: { steps: DeployTaskStep[] };
+  error?: string;
+  server_id?: string;
+  completed_at?: string;
+  created_at?: string;
+}
+
+// Get deploy task status
+export async function getDeployTask(id: string): Promise<DeployTask> {
+  return get<DeployTask>(`/database/deploy/${id}`);
 }
 
 export interface DatabaseInstance {

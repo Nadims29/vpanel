@@ -74,36 +74,71 @@ api.interceptors.response.use(
 
 export default api;
 
+// Extract error message from API response or AxiosError
+function extractErrorMessage(error: unknown): string {
+  if (axios.isAxiosError(error)) {
+    const axiosError = error as AxiosError<ApiResponse>;
+    // Try to get message from response body
+    if (axiosError.response?.data?.error?.message) {
+      return axiosError.response.data.error.message;
+    }
+    // Fallback to status text
+    if (axiosError.response?.statusText) {
+      return axiosError.response.statusText;
+    }
+  }
+  if (error instanceof Error) {
+    return error.message;
+  }
+  return 'Request failed';
+}
+
 // Helper functions
 export async function get<T>(url: string, params?: Record<string, unknown>): Promise<T> {
-  const response = await api.get<ApiResponse<T>>(url, { params });
-  if (!response.data.success) {
-    throw new Error(response.data.error?.message || 'Request failed');
+  try {
+    const response = await api.get<ApiResponse<T>>(url, { params });
+    if (!response.data.success) {
+      throw new Error(response.data.error?.message || 'Request failed');
+    }
+    return response.data.data as T;
+  } catch (error) {
+    throw new Error(extractErrorMessage(error));
   }
-  return response.data.data as T;
 }
 
 export async function post<T>(url: string, data?: unknown): Promise<T> {
-  const response = await api.post<ApiResponse<T>>(url, data);
-  if (!response.data.success) {
-    throw new Error(response.data.error?.message || 'Request failed');
+  try {
+    const response = await api.post<ApiResponse<T>>(url, data);
+    if (!response.data.success) {
+      throw new Error(response.data.error?.message || 'Request failed');
+    }
+    return response.data.data as T;
+  } catch (error) {
+    throw new Error(extractErrorMessage(error));
   }
-  return response.data.data as T;
 }
 
 export async function put<T>(url: string, data?: unknown): Promise<T> {
-  const response = await api.put<ApiResponse<T>>(url, data);
-  if (!response.data.success) {
-    throw new Error(response.data.error?.message || 'Request failed');
+  try {
+    const response = await api.put<ApiResponse<T>>(url, data);
+    if (!response.data.success) {
+      throw new Error(response.data.error?.message || 'Request failed');
+    }
+    return response.data.data as T;
+  } catch (error) {
+    throw new Error(extractErrorMessage(error));
   }
-  return response.data.data as T;
 }
 
 export async function del<T>(url: string): Promise<T> {
-  const response = await api.delete<ApiResponse<T>>(url);
-  if (!response.data.success) {
-    throw new Error(response.data.error?.message || 'Request failed');
+  try {
+    const response = await api.delete<ApiResponse<T>>(url);
+    if (!response.data.success) {
+      throw new Error(response.data.error?.message || 'Request failed');
+    }
+    return response.data.data as T;
+  } catch (error) {
+    throw new Error(extractErrorMessage(error));
   }
-  return response.data.data as T;
 }
 

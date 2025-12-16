@@ -398,7 +398,7 @@ export default function FirewallRules() {
   const fetchRules = useCallback(async () => {
     try {
       const data = await firewallApi.listFirewallRules(nodeId);
-      setRules(data);
+      setRules(data || []);
     } catch (error) {
       console.error('Failed to fetch rules:', error);
       toast.error(error instanceof Error ? error.message : 'Failed to fetch firewall rules');
@@ -412,7 +412,7 @@ export default function FirewallRules() {
   const fetchJails = useCallback(async () => {
     try {
       const data = await firewallApi.listFail2BanJails(nodeId);
-      setJails(data);
+      setJails(data || []);
     } catch (error) {
       console.error('Failed to fetch Fail2Ban jails:', error);
     }

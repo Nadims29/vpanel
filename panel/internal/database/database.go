@@ -67,12 +67,14 @@ func AutoMigrate(db *gorm.DB) error {
 		&models.DockerComposeProject{},
 
 		// Nginx
+		&models.NginxInstance{},
 		&models.NginxSite{},
 		&models.SSLCertificate{},
 
 		// Database
 		&models.DatabaseServer{},
 		&models.DatabaseBackup{},
+		&models.DeployTask{},
 
 		// Cron
 		&models.CronJob{},
@@ -92,6 +94,10 @@ func AutoMigrate(db *gorm.DB) error {
 		&models.SystemSetting{},
 		&models.Notification{},
 		&models.Alert{},
+
+		// Apps (GitHub Deploy)
+		&models.App{},
+		&models.AppDeployment{},
 	)
 }
 

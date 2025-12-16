@@ -42,7 +42,7 @@ import {
 import { cn } from '@/utils/cn';
 import { useThemeStore } from '@/stores/theme';
 import * as databaseApi from '@/api/database';
-import type { DatabaseServer as ApiDatabaseServer, DatabaseType } from '@/api/database';
+import type { DatabaseServer as ApiDatabaseServer, DatabaseType, DeployTask } from '@/api/database';
 
 interface DatabaseServer extends ApiDatabaseServer {
   // Extended fields for display (can be computed from API data)
@@ -84,20 +84,23 @@ function enrichServer(server: ApiDatabaseServer): DatabaseServer {
   };
 }
 
-const dbTypeConfig: Record<DatabaseType, { icon: string; color: string; bgColor: string }> = {
+const dbTypeConfig: Record<string, { icon: string; color: string; bgColor: string }> = {
   mysql: { icon: '🐬', color: 'text-blue-500', bgColor: 'bg-blue-500/10' },
   postgresql: { icon: '🐘', color: 'text-blue-600', bgColor: 'bg-blue-600/10' },
+  postgres: { icon: '🐘', color: 'text-blue-600', bgColor: 'bg-blue-600/10' }, // Alias for postgresql
   mongodb: { icon: '🍃', color: 'text-green-500', bgColor: 'bg-green-500/10' },
   redis: { icon: '⚡', color: 'text-red-500', bgColor: 'bg-red-500/10' },
   mariadb: { icon: '🦭', color: 'text-amber-600', bgColor: 'bg-amber-600/10' },
 };
+
+const defaultTypeConfig = { icon: '🗄️', color: 'text-gray-500', bgColor: 'bg-gray-500/10' };
 
 function ServerCard({ server, onSelect, onDelete }: { server: DatabaseServer; onSelect: () => void; onDelete: () => void }) {
   const [showDelete, setShowDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const resolvedMode = useThemeStore((state) => state.resolvedMode);
   const isLight = resolvedMode === 'light';
-  const typeConfig = dbTypeConfig[server.type];
+  const typeConfig = dbTypeConfig[server.type] || defaultTypeConfig;
 
   const handleDelete = async () => {
     setDeleting(true);
@@ -115,13 +118,12 @@ function ServerCard({ server, onSelect, onDelete }: { server: DatabaseServer; on
 
   return (
     <>
-      <motion.div
-        layout
-        initial={{ opacity: 0, scale: 0.95 }}
-        animate={{ opacity: 1, scale: 1 }}
+      <div
         className={cn(
-          'rounded-xl border transition-all cursor-pointer hover:shadow-lg',
-          isLight ? 'bg-white border-gray-200 hover:border-gray-300' : 'bg-gray-800/50 border-gray-700 hover:border-gray-600'
+          'rounded-xl border-2 transition-all cursor-pointer hover:shadow-lg',
+          isLight 
+            ? 'bg-white border-gray-200 hover:border-gray-300 shadow-sm' 
+            : 'bg-gray-800/50 border-gray-700 hover:border-gray-600'
         )}
         onClick={onSelect}
       >
@@ -256,7 +258,7 @@ function ServerCard({ server, onSelect, onDelete }: { server: DatabaseServer; on
             <span>Last backup: {server.lastBackup}</span>
           )}
         </div>
-      </motion.div>
+      </div>
 
       <ConfirmModal
         open={showDelete}
@@ -419,7 +421,7 @@ function ServerDetail({ server, onBack }: { server: DatabaseServer; onBack: () =
   const resolvedMode = useThemeStore((state) => state.resolvedMode);
   const isLight = resolvedMode === 'light';
   const [activeTab, setActiveTab] = useState<'databases' | 'users' | 'metrics' | 'settings'>('databases');
-  const typeConfig = dbTypeConfig[server.type];
+  const typeConfig = dbTypeConfig[server.type] || defaultTypeConfig;
 
   return (
     <div>
@@ -676,6 +678,7 @@ export default function DatabaseServers() {
   const isLight = resolvedMode === 'light';
 
   // Form state for adding server
+  const [addMode, setAddMode] = useState<'create' | 'connect'>('create');
   const [formData, setFormData] = useState({
     name: '',
     type: 'mysql' as DatabaseType,
@@ -683,12 +686,46 @@ export default function DatabaseServers() {
     port: 3306,
     username: '',
     password: '',
+    rootPassword: '',
+    version: '',
   });
   const [submitting, setSubmitting] = useState(false);
+
+  // Deploy progress state
+  const [deployTask, setDeployTask] = useState<DeployTask | null>(null);
+  const [showDeployProgress, setShowDeployProgress] = useState(false);
 
   useEffect(() => {
     fetchServers();
   }, []);
+
+  // Poll deploy task progress
+  useEffect(() => {
+    if (!deployTask || deployTask.status === 'completed' || deployTask.status === 'failed') {
+      return;
+    }
+
+    const interval = setInterval(async () => {
+      try {
+        const task = await databaseApi.getDeployTask(deployTask.id);
+        setDeployTask(task);
+
+        if (task.status === 'completed' || task.status === 'failed') {
+          clearInterval(interval);
+          if (task.status === 'completed') {
+            // Refresh server list after successful deployment
+            setTimeout(() => {
+              fetchServers();
+            }, 1000);
+          }
+        }
+      } catch (err) {
+        console.error('Failed to get deploy status:', err);
+      }
+    }, 500); // Poll every 500ms
+
+    return () => clearInterval(interval);
+  }, [deployTask?.id, deployTask?.status]);
 
   const fetchServers = async () => {
     try {
@@ -706,37 +743,87 @@ export default function DatabaseServers() {
   };
 
   const handleAddServer = async () => {
-    if (!formData.name || !formData.host || !formData.username) {
-      alert('Please fill in all required fields');
+    if (!formData.name) {
+      alert('Please enter a server name');
       return;
+    }
+
+    if (addMode === 'connect') {
+      if (!formData.host || !formData.username) {
+        alert('Please fill in all required fields');
+        return;
+      }
+    } else {
+      // Create mode
+      if (!formData.rootPassword && formData.type !== 'redis') {
+        alert('Please enter a root password');
+        return;
+      }
     }
 
     setSubmitting(true);
     try {
-      await databaseApi.createServer({
-        name: formData.name,
-        type: formData.type,
-        host: formData.host,
-        port: formData.port,
-        username: formData.username,
-        password: formData.password,
-      });
-      setShowAdd(false);
-      setFormData({
-        name: '',
-        type: 'mysql',
-        host: 'localhost',
-        port: 3306,
-        username: '',
-        password: '',
-      });
-      fetchServers();
+      if (addMode === 'create') {
+        // Start async deployment
+        const result = await databaseApi.createServer({
+          mode: 'create',
+          name: formData.name,
+          type: formData.type,
+          port: formData.port || undefined,
+          root_password: formData.rootPassword,
+          version: formData.version || undefined,
+        });
+        
+        // Result is a DeployTask
+        setDeployTask(result as unknown as DeployTask);
+        setShowAdd(false);
+        setShowDeployProgress(true);
+        setFormData({
+          name: '',
+          type: 'mysql',
+          host: 'localhost',
+          port: 3306,
+          username: '',
+          password: '',
+          rootPassword: '',
+          version: '',
+        });
+      } else {
+        await databaseApi.createServer({
+          mode: 'connect',
+          name: formData.name,
+          type: formData.type,
+          host: formData.host,
+          port: formData.port,
+          username: formData.username,
+          password: formData.password,
+        });
+        setShowAdd(false);
+        setAddMode('create');
+        setFormData({
+          name: '',
+          type: 'mysql',
+          host: 'localhost',
+          port: 3306,
+          username: '',
+          password: '',
+          rootPassword: '',
+          version: '',
+        });
+        fetchServers();
+      }
     } catch (err) {
       console.error('Failed to create server:', err);
       alert(err instanceof Error ? err.message : 'Failed to create database server');
     } finally {
       setSubmitting(false);
     }
+  };
+
+  const handleCloseDeployProgress = () => {
+    setShowDeployProgress(false);
+    setDeployTask(null);
+    setAddMode('create');
   };
 
   const filteredServers = servers.filter((s) => {
@@ -765,7 +852,7 @@ export default function DatabaseServers() {
           <p className={cn(isLight ? 'text-gray-600' : 'text-gray-400')}>Manage your database connections</p>
         </div>
         <Button leftIcon={<Plus className="w-5 h-5" />} onClick={() => setShowAdd(true)}>
-          Add Server
+          Create Server
         </Button>
       </div>
 
@@ -847,16 +934,14 @@ export default function DatabaseServers() {
         </Card>
       ) : filteredServers.length > 0 ? (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          <AnimatePresence>
-            {filteredServers.map((server) => (
-              <ServerCard 
-                key={server.id} 
-                server={server} 
-                onSelect={() => setSelectedServer(server)}
-                onDelete={fetchServers}
-              />
-            ))}
-          </AnimatePresence>
+          {filteredServers.map((server) => (
+            <ServerCard 
+              key={server.id} 
+              server={server} 
+              onSelect={() => setSelectedServer(server)}
+              onDelete={fetchServers}
+            />
+          ))}
         </div>
       ) : (
         <Card padding>
@@ -865,19 +950,47 @@ export default function DatabaseServers() {
             title="No database servers found"
             description={search || filterType !== 'all' ? "No servers match your filters" : "Add your first database server to start managing"}
             action={
-              <Button leftIcon={<Plus className="w-5 h-5" />} onClick={() => setShowAdd(true)}>
-                Add Server
-              </Button>
+            <Button leftIcon={<Plus className="w-5 h-5" />} onClick={() => setShowAdd(true)}>
+              Create Server
+            </Button>
             }
           />
         </Card>
       )}
 
-      {/* Add Server Modal */}
-      <Modal open={showAdd} onClose={() => setShowAdd(false)} title="Add Database Server" size="md">
+      {/* Create Server Modal */}
+      <Modal open={showAdd} onClose={() => setShowAdd(false)} title="Create Database Server" size="md">
         <div className="space-y-4">
+          {/* Mode Toggle */}
+          <div className="flex gap-2 p-1 rounded-lg bg-gray-100 dark:bg-gray-800">
+            <button
+              onClick={() => setAddMode('create')}
+              className={cn(
+                'flex-1 py-2 px-4 rounded-md text-sm font-medium transition-all',
+                addMode === 'create'
+                  ? 'bg-white dark:bg-gray-700 shadow text-gray-900 dark:text-gray-100'
+                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
+              )}
+            >
+              Create New
+            </button>
+            <button
+              onClick={() => setAddMode('connect')}
+              className={cn(
+                'flex-1 py-2 px-4 rounded-md text-sm font-medium transition-all',
+                addMode === 'connect'
+                  ? 'bg-white dark:bg-gray-700 shadow text-gray-900 dark:text-gray-100'
+                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
+              )}
+            >
+              Connect Existing
+            </button>
+          </div>
+
           <p className={cn('text-sm', isLight ? 'text-gray-600' : 'text-gray-400')}>
-            Connect to an existing database server or create a new one.
+            {addMode === 'create' 
+              ? 'Deploy a new database server using Docker. Make sure Docker is running.'
+              : 'Connect to an existing database server on your network.'}
           </p>
 
           <div>
@@ -921,52 +1034,152 @@ export default function DatabaseServers() {
             </select>
           </div>
 
-          <div className="grid grid-cols-3 gap-4">
-            <div className="col-span-2">
-              <label className={cn('block text-sm font-medium mb-1.5', isLight ? 'text-gray-700' : 'text-gray-300')}>
-                Host *
-              </label>
-              <Input 
-                placeholder="localhost" 
-                value={formData.host}
-                onChange={(e) => setFormData({ ...formData, host: e.target.value })}
-              />
-            </div>
-            <div>
-              <label className={cn('block text-sm font-medium mb-1.5', isLight ? 'text-gray-700' : 'text-gray-300')}>
-                Port *
-              </label>
-              <Input 
-                type="number"
-                placeholder="3306" 
-                value={formData.port}
-                onChange={(e) => setFormData({ ...formData, port: parseInt(e.target.value) || 3306 })}
-              />
-            </div>
-          </div>
+          {addMode === 'create' ? (
+            <>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className={cn('block text-sm font-medium mb-1.5', isLight ? 'text-gray-700' : 'text-gray-300')}>
+                    Version
+                  </label>
+                  <select
+                    value={formData.version}
+                    onChange={(e) => setFormData({ ...formData, version: e.target.value })}
+                    className={cn(
+                      'w-full px-3 py-2 rounded-lg border text-sm',
+                      isLight ? 'bg-white border-gray-200 text-gray-700' : 'bg-gray-900 border-gray-700 text-gray-300'
+                    )}
+                  >
+                    {formData.type === 'mysql' && (
+                      <>
+                        <option value="latest">Latest (8.x)</option>
+                        <option value="8.0">8.0</option>
+                        <option value="8.4">8.4</option>
+                        <option value="5.7">5.7</option>
+                      </>
+                    )}
+                    {formData.type === 'mariadb' && (
+                      <>
+                        <option value="latest">Latest (11.x)</option>
+                        <option value="11">11</option>
+                        <option value="10.11">10.11 LTS</option>
+                        <option value="10.6">10.6 LTS</option>
+                      </>
+                    )}
+                    {formData.type === 'postgresql' && (
+                      <>
+                        <option value="latest">Latest (16.x)</option>
+                        <option value="16">16</option>
+                        <option value="15">15</option>
+                        <option value="14">14</option>
+                        <option value="13">13</option>
+                      </>
+                    )}
+                    {formData.type === 'mongodb' && (
+                      <>
+                        <option value="latest">Latest (7.x)</option>
+                        <option value="7.0">7.0</option>
+                        <option value="6.0">6.0</option>
+                        <option value="5.0">5.0</option>
+                      </>
+                    )}
+                    {formData.type === 'redis' && (
+                      <>
+                        <option value="latest">Latest (7.x)</option>
+                        <option value="7">7</option>
+                        <option value="6">6</option>
+                      </>
+                    )}
+                  </select>
+                </div>
+                <div>
+                  <label className={cn('block text-sm font-medium mb-1.5', isLight ? 'text-gray-700' : 'text-gray-300')}>
+                    Port
+                  </label>
+                  <Input 
+                    type="number"
+                    placeholder={String(formData.port)} 
+                    value={formData.port}
+                    onChange={(e) => setFormData({ ...formData, port: parseInt(e.target.value) || formData.port })}
+                  />
+                </div>
+              </div>
 
-          <div>
-            <label className={cn('block text-sm font-medium mb-1.5', isLight ? 'text-gray-700' : 'text-gray-300')}>
-              Username *
-            </label>
-            <Input 
-              placeholder="root" 
-              value={formData.username}
-              onChange={(e) => setFormData({ ...formData, username: e.target.value })}
-            />
-          </div>
+              {formData.type !== 'redis' && (
+                <div>
+                  <label className={cn('block text-sm font-medium mb-1.5', isLight ? 'text-gray-700' : 'text-gray-300')}>
+                    Root Password *
+                  </label>
+                  <Input 
+                    type="password" 
+                    placeholder="Enter a secure password" 
+                    value={formData.rootPassword}
+                    onChange={(e) => setFormData({ ...formData, rootPassword: e.target.value })}
+                  />
+                  <p className={cn('text-xs mt-1', isLight ? 'text-gray-500' : 'text-gray-500')}>
+                    {formData.type === 'postgresql' ? 'postgres' : formData.type === 'mongodb' ? 'root' : 'root'} user password
+                  </p>
+                </div>
+              )}
 
-          <div>
-            <label className={cn('block text-sm font-medium mb-1.5', isLight ? 'text-gray-700' : 'text-gray-300')}>
-              Password *
-            </label>
-            <Input 
-              type="password" 
-              placeholder="••••••••" 
-              value={formData.password}
-              onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-            />
-          </div>
+              <div className={cn('p-3 rounded-lg text-sm space-y-1', isLight ? 'bg-blue-50 text-blue-700' : 'bg-blue-900/30 text-blue-300')}>
+                <p><strong>Deploy Info:</strong></p>
+                <ul className="list-disc list-inside text-xs space-y-0.5">
+                  <li>Docker image will be pulled automatically</li>
+                  <li>Data persisted to volume: <code className="font-mono">vpanel-db-{formData.name || 'name'}</code></li>
+                  <li>Accessible at: <code className="font-mono">127.0.0.1:{formData.port}</code></li>
+                </ul>
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="grid grid-cols-3 gap-4">
+                <div className="col-span-2">
+                  <label className={cn('block text-sm font-medium mb-1.5', isLight ? 'text-gray-700' : 'text-gray-300')}>
+                    Host *
+                  </label>
+                  <Input 
+                    placeholder="localhost or IP address" 
+                    value={formData.host}
+                    onChange={(e) => setFormData({ ...formData, host: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label className={cn('block text-sm font-medium mb-1.5', isLight ? 'text-gray-700' : 'text-gray-300')}>
+                    Port *
+                  </label>
+                  <Input 
+                    type="number"
+                    placeholder="3306" 
+                    value={formData.port}
+                    onChange={(e) => setFormData({ ...formData, port: parseInt(e.target.value) || 3306 })}
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className={cn('block text-sm font-medium mb-1.5', isLight ? 'text-gray-700' : 'text-gray-300')}>
+                  Username *
+                </label>
+                <Input 
+                  placeholder="root" 
+                  value={formData.username}
+                  onChange={(e) => setFormData({ ...formData, username: e.target.value })}
+                />
+              </div>
+
+              <div>
+                <label className={cn('block text-sm font-medium mb-1.5', isLight ? 'text-gray-700' : 'text-gray-300')}>
+                  Password
+                </label>
+                <Input 
+                  type="password" 
+                  placeholder="••••••••" 
+                  value={formData.password}
+                  onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                />
+              </div>
+            </>
+          )}
 
           <div className={cn(
             'flex justify-end gap-3 pt-4 border-t',
@@ -976,10 +1189,138 @@ export default function DatabaseServers() {
               Cancel
             </Button>
             <Button onClick={handleAddServer} disabled={submitting}>
-              {submitting ? 'Testing & Adding...' : 'Test & Add'}
+              {submitting 
+                ? (addMode === 'create' ? 'Starting...' : 'Connecting...') 
+                : (addMode === 'create' ? 'Deploy Server' : 'Connect')}
             </Button>
           </div>
         </div>
+      </Modal>
+
+      {/* Deploy Progress Modal */}
+      <Modal 
+        open={showDeployProgress} 
+        onClose={handleCloseDeployProgress}
+        closeOnBackdrop={deployTask?.status === 'completed' || deployTask?.status === 'failed'}
+        showClose={deployTask?.status === 'completed' || deployTask?.status === 'failed'}
+        title={`Deploying ${deployTask?.name || 'Database'}`}
+        size="md"
+      >
+        {deployTask && (
+          <div className="space-y-6">
+            {/* Status Header */}
+            <div className="flex items-center gap-3">
+              <div className={cn(
+                'w-12 h-12 rounded-xl flex items-center justify-center text-2xl',
+                deployTask.status === 'completed' ? 'bg-green-500/20' :
+                deployTask.status === 'failed' ? 'bg-red-500/20' :
+                'bg-blue-500/20'
+              )}>
+                {deployTask.status === 'completed' ? '✅' :
+                 deployTask.status === 'failed' ? '❌' :
+                 dbTypeConfig[deployTask.type]?.icon || '🗄️'}
+              </div>
+              <div className="flex-1">
+                <h3 className={cn('font-semibold', isLight ? 'text-gray-900' : 'text-gray-100')}>
+                  {deployTask.status === 'completed' ? 'Deployment Complete!' :
+                   deployTask.status === 'failed' ? 'Deployment Failed' :
+                   deployTask.current_step}
+                </h3>
+                <p className={cn('text-sm', isLight ? 'text-gray-500' : 'text-gray-400')}>
+                  {deployTask.type.toUpperCase()} • {deployTask.name}
+                </p>
+              </div>
+            </div>
+
+            {/* Overall Progress Bar */}
+            <div>
+              <div className="flex justify-between text-sm mb-2">
+                <span className={isLight ? 'text-gray-600' : 'text-gray-400'}>Progress</span>
+                <span className={cn('font-medium', isLight ? 'text-gray-900' : 'text-gray-100')}>
+                  {deployTask.progress}%
+                </span>
+              </div>
+              <div className={cn('h-3 rounded-full overflow-hidden', isLight ? 'bg-gray-200' : 'bg-gray-700')}>
+                <motion.div
+                  className={cn(
+                    'h-full rounded-full',
+                    deployTask.status === 'failed' ? 'bg-red-500' :
+                    deployTask.status === 'completed' ? 'bg-green-500' :
+                    'bg-blue-500'
+                  )}
+                  initial={{ width: 0 }}
+                  animate={{ width: `${deployTask.progress}%` }}
+                  transition={{ duration: 0.3 }}
+                />
+              </div>
+            </div>
+
+            {/* Step List */}
+            <div className="space-y-2">
+              {deployTask.steps?.steps?.map((step, index) => (
+                <div 
+                  key={index}
+                  className={cn(
+                    'flex items-center gap-3 p-3 rounded-lg',
+                    isLight ? 'bg-gray-50' : 'bg-gray-800/50'
+                  )}
+                >
+                  <div className="w-6 h-6 flex items-center justify-center">
+                    {step.status === 'completed' ? (
+                      <CheckCircle className="w-5 h-5 text-green-500" />
+                    ) : step.status === 'running' ? (
+                      <RefreshCw className="w-5 h-5 text-blue-500 animate-spin" />
+                    ) : step.status === 'failed' ? (
+                      <XCircle className="w-5 h-5 text-red-500" />
+                    ) : (
+                      <div className={cn('w-2 h-2 rounded-full', isLight ? 'bg-gray-300' : 'bg-gray-600')} />
+                    )}
+                  </div>
+                  <span className={cn(
+                    'flex-1 text-sm',
+                    step.status === 'completed' ? (isLight ? 'text-gray-900' : 'text-gray-100') :
+                    step.status === 'running' ? 'text-blue-500 font-medium' :
+                    step.status === 'failed' ? 'text-red-500' :
+                    (isLight ? 'text-gray-400' : 'text-gray-500')
+                  )}>
+                    {step.name}
+                  </span>
+                  {step.status === 'running' && step.progress > 0 && step.progress < 100 && (
+                    <span className="text-xs text-blue-500">{step.progress}%</span>
+                  )}
+                </div>
+              ))}
+            </div>
+
+            {/* Error Message */}
+            {deployTask.status === 'failed' && deployTask.error && (
+              <div className={cn('p-4 rounded-lg', isLight ? 'bg-red-50 text-red-700' : 'bg-red-900/30 text-red-300')}>
+                <p className="font-medium mb-1">Error</p>
+                <p className="text-sm">{deployTask.error}</p>
+              </div>
+            )}
+
+            {/* Success Info */}
+            {deployTask.status === 'completed' && (
+              <div className={cn('p-4 rounded-lg', isLight ? 'bg-green-50 text-green-700' : 'bg-green-900/30 text-green-300')}>
+                <p className="font-medium mb-2">🎉 Database is ready!</p>
+                <div className="text-sm space-y-1">
+                  <p>Host: <code className="font-mono">127.0.0.1</code></p>
+                  <p>Type: <code className="font-mono">{deployTask.type}</code></p>
+                </div>
+              </div>
+            )}
+
+            {/* Close Button */}
+            {(deployTask.status === 'completed' || deployTask.status === 'failed') && (
+              <div className="flex justify-end pt-2">
+                <Button onClick={handleCloseDeployProgress}>
+                  {deployTask.status === 'completed' ? 'Done' : 'Close'}
+                </Button>
+              </div>
+            )}
+          </div>
+        )}
       </Modal>
     </div>
   );

@@ -34,7 +34,7 @@ import {
 import { cn } from '@/utils/cn';
 import toast from 'react-hot-toast';
 import * as nginxApi from '@/api/nginx';
-import type { SSLCertificate } from '@/api/nginx';
+import type { NginxStatus, SSLCertificate } from '@/api/nginx';
 
 interface Certificate extends SSLCertificate {
   daysUntilExpiry: number;
@@ -216,6 +216,25 @@ export default function NginxCertificates() {
   const [certificates, setCertificates] = useState<Certificate[]>([]);
   const [loading, setLoading] = useState(true);
   const [createType, setCreateType] = useState<'letsencrypt' | 'custom'>('letsencrypt');
+  const [nginxStatus, setNginxStatus] = useState<NginxStatus | null>(null);
+  const [statusLoading, setStatusLoading] = useState(true);
+
+  // Fetch nginx status
+  const fetchStatus = useCallback(async () => {
+    try {
+      setStatusLoading(true);
+      const status = await nginxApi.getNginxStatus();
+      setNginxStatus(status);
+    } catch (error) {
+      console.error('Failed to fetch nginx status:', error);
+    } finally {
+      setStatusLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchStatus();
+  }, [fetchStatus]);
 
   // Form state for Let's Encrypt
   const [leDomain, setLeDomain] = useState('');
@@ -264,8 +283,10 @@ export default function NginxCertificates() {
   }, []);
 
   useEffect(() => {
-    fetchCertificates();
-  }, [fetchCertificates]);
+    if (nginxStatus?.installed) {
+      fetchCertificates();
+    }
+  }, [fetchCertificates, nginxStatus?.installed]);
 
   const handleCreateLetsEncrypt = useCallback(async () => {
     if (!leDomain.trim()) {
@@ -369,6 +390,58 @@ export default function NginxCertificates() {
   const validCount = certificates.filter((c) => c.status === 'valid').length;
   const expiringCount = certificates.filter((c) => c.status === 'expiring').length;
   const expiredCount = certificates.filter((c) => c.status === 'expired').length;
+
+  // Show loading state while checking nginx status
+  if (statusLoading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Spinner />
+      </div>
+    );
+  }
+
+  // Show install prompt if nginx is not installed
+  if (nginxStatus && !nginxStatus.installed) {
+    const getInstallCommand = () => {
+      switch (nginxStatus.os) {
+        case 'darwin':
+          return 'brew install nginx';
+        case 'linux':
+          return 'sudo apt install nginx  # 或 sudo yum install nginx';
+        default:
+          return 'brew install nginx';
+      }
+    };
+
+    return (
+      <div>
+        <div className="mb-6">
+          <h1 className="text-2xl font-semibold text-dark-100">SSL Certificates</h1>
+          <p className="text-dark-400">Manage SSL/TLS certificates for your domains</p>
+        </div>
+        <Card padding className="text-center py-12">
+          <div className="flex flex-col items-center gap-4">
+            <div className="w-16 h-16 rounded-full bg-yellow-500/10 flex items-center justify-center">
+              <AlertTriangle className="w-8 h-8 text-yellow-500" />
+            </div>
+            <div>
+              <h2 className="text-xl font-semibold text-dark-100 mb-2">Nginx 未安装</h2>
+              <p className="text-dark-400 max-w-md mx-auto mb-4">
+                要管理 SSL 证书，您需要先安装 Nginx。请在终端中运行以下命令安装：
+              </p>
+              <div className="bg-dark-900 rounded-lg p-4 font-mono text-sm text-dark-200 mb-4">
+                <code>{getInstallCommand()}</code>
+              </div>
+              <Button variant="secondary" onClick={fetchStatus}>
+                <RefreshCw className="w-4 h-4 mr-2" />
+                重新检查
+              </Button>
+            </div>
+          </div>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div>

@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"os"
 	"os/exec"
@@ -13,6 +14,7 @@ import (
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/filters"
+	"github.com/docker/docker/api/types/image"
 	"github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/api/types/volume"
 	"github.com/docker/docker/client"
@@ -32,9 +34,27 @@ type DockerService struct {
 func NewDockerService(db *gorm.DB, log *logger.Logger) *DockerService {
 	cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
 	if err != nil {
-		log.Warn("Failed to connect to Docker", "error", err)
+		log.Warn("Failed to create Docker client", "error", err)
+		return &DockerService{db: db, log: log, client: nil}
 	}
+
+	// Test the connection
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	_, err = cli.Ping(ctx)
+	if err != nil {
+		log.Warn("Failed to connect to Docker daemon", "error", err)
+		return &DockerService{db: db, log: log, client: nil}
+	}
+
+	log.Info("Docker daemon connected successfully")
 	return &DockerService{db: db, log: log, client: cli}
+}
+
+// GetClient returns the underlying Docker client.
+// This is used by the plugin system to provide Docker API access to plugins.
+func (s *DockerService) GetClient() *client.Client {
+	return s.client
 }
 
 // ContainerInfo represents container information
@@ -92,7 +112,7 @@ func (s *DockerService) ListContainers(ctx context.Context, all bool) ([]Contain
 		return nil, ErrDockerNotConnected
 	}
 
-	containers, err := s.client.ContainerList(ctx, types.ContainerListOptions{All: all})
+	containers, err := s.client.ContainerList(ctx, container.ListOptions{All: all})
 	if err != nil {
 		return nil, err
 	}
@@ -217,7 +237,7 @@ func (s *DockerService) CreateContainer(ctx context.Context, req *CreateContaine
 	// Pull image if not exists
 	_, _, err := s.client.ImageInspectWithRaw(ctx, req.Image)
 	if err != nil {
-		reader, err := s.client.ImagePull(ctx, req.Image, types.ImagePullOptions{})
+		reader, err := s.client.ImagePull(ctx, req.Image, image.PullOptions{})
 		if err != nil {
 			return "", err
 		}
@@ -291,7 +311,7 @@ func (s *DockerService) StartContainer(ctx context.Context, id string) error {
 	if s.client == nil {
 		return ErrDockerNotConnected
 	}
-	return s.client.ContainerStart(ctx, id, types.ContainerStartOptions{})
+	return s.client.ContainerStart(ctx, id, container.StartOptions{})
 }
 
 // StopContainer stops a container
@@ -317,7 +337,7 @@ func (s *DockerService) RemoveContainer(ctx context.Context, id string, force bo
 	if s.client == nil {
 		return ErrDockerNotConnected
 	}
-	return s.client.ContainerRemove(ctx, id, types.ContainerRemoveOptions{Force: force})
+	return s.client.ContainerRemove(ctx, id, container.RemoveOptions{Force: force})
 }
 
 // GetContainerLogs returns container logs
@@ -326,7 +346,7 @@ func (s *DockerService) GetContainerLogs(ctx context.Context, id string, tail in
 		return "", ErrDockerNotConnected
 	}
 
-	options := types.ContainerLogsOptions{
+	options := container.LogsOptions{
 		ShowStdout: true,
 		ShowStderr: true,
 		Timestamps: timestamps,
@@ -399,7 +419,7 @@ func (s *DockerService) ListImages(ctx context.Context) ([]ImageInfo, error) {
 		return nil, ErrDockerNotConnected
 	}
 
-	images, err := s.client.ImageList(ctx, types.ImageListOptions{})
+	images, err := s.client.ImageList(ctx, image.ListOptions{})
 	if err != nil {
 		return nil, err
 	}
@@ -423,7 +443,7 @@ func (s *DockerService) PullImage(ctx context.Context, imageName string) error {
 		return ErrDockerNotConnected
 	}
 
-	reader, err := s.client.ImagePull(ctx, imageName, types.ImagePullOptions{})
+	reader, err := s.client.ImagePull(ctx, imageName, image.PullOptions{})
 	if err != nil {
 		return err
 	}
@@ -438,7 +458,7 @@ func (s *DockerService) RemoveImage(ctx context.Context, id string, force bool) 
 		return ErrDockerNotConnected
 	}
 
-	_, err := s.client.ImageRemove(ctx, id, types.ImageRemoveOptions{Force: force})
+	_, err := s.client.ImageRemove(ctx, id, image.RemoveOptions{Force: force})
 	return err
 }
 
@@ -457,7 +477,7 @@ func (s *DockerService) ListNetworks(ctx context.Context) ([]NetworkInfo, error)
 		return nil, ErrDockerNotConnected
 	}
 
-	networks, err := s.client.NetworkList(ctx, types.NetworkListOptions{})
+	networks, err := s.client.NetworkList(ctx, network.ListOptions{})
 	if err != nil {
 		return nil, err
 	}
@@ -482,7 +502,7 @@ func (s *DockerService) CreateNetwork(ctx context.Context, name, driver string) 
 		return "", ErrDockerNotConnected
 	}
 
-	resp, err := s.client.NetworkCreate(ctx, name, types.NetworkCreate{Driver: driver})
+	resp, err := s.client.NetworkCreate(ctx, name, network.CreateOptions{Driver: driver})
 	if err != nil {
 		return "", err
 	}
@@ -708,7 +728,7 @@ func (s *DockerService) execComposeCommand(ctx context.Context, workDir string, 
 
 func (s *DockerService) checkComposeStatus(ctx context.Context, path, projectName string) string {
 	// Check if containers are running by looking for containers with the project label
-	containers, err := s.client.ContainerList(ctx, types.ContainerListOptions{
+	containers, err := s.client.ContainerList(ctx, container.ListOptions{
 		All: true,
 		Filters: filters.NewArgs(
 			filters.Arg("label", "com.docker.compose.project="+projectName),
@@ -756,9 +776,9 @@ func (e *dockerError) Error() string {
 // Helper functions
 func formatPort(p types.Port) string {
 	if p.PublicPort > 0 {
-		return string(rune(p.PublicPort)) + ":" + string(rune(p.PrivatePort)) + "/" + p.Type
+		return fmt.Sprintf("%d:%d/%s", p.PublicPort, p.PrivatePort, p.Type)
 	}
-	return string(rune(p.PrivatePort)) + "/" + p.Type
+	return fmt.Sprintf("%d/%s", p.PrivatePort, p.Type)
 }
 
 func formatTime(ts int64) string {

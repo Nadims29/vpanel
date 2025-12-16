@@ -1,5 +1,37 @@
 import { get, post, del } from './client';
 
+export interface DockerInfo {
+  containers: number;
+  containers_running: number;
+  containers_paused: number;
+  containers_stopped: number;
+  images: number;
+  server_version: string;
+  os: string;
+  architecture: string;
+  memory: number;
+  cpus: number;
+  name: string;
+}
+
+// Get Docker daemon info
+export async function getDockerInfo(): Promise<DockerInfo> {
+  return get<DockerInfo>('/docker/info');
+}
+
+// Check if Docker is available
+export async function checkDockerStatus(): Promise<{ available: boolean; info?: DockerInfo; error?: string }> {
+  try {
+    const info = await getDockerInfo();
+    return { available: true, info };
+  } catch (error) {
+    return { 
+      available: false, 
+      error: error instanceof Error ? error.message : 'Docker is not available' 
+    };
+  }
+}
+
 export interface Container {
   id: string;
   name: string;

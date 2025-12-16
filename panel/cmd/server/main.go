@@ -80,13 +80,13 @@ func main() {
 	// Initialize services
 	svc := services.NewContainer(db, cfg, log)
 
-	// Initialize plugin system
+	// Initialize plugin system with database and docker connections
 	pluginManager := plugin.NewManager(plugin.Config{
 		PluginDir:  cfg.Plugin.Directory,
 		DataDir:    cfg.Plugin.DataDirectory,
 		MarketURL:  cfg.Plugin.MarketURL,
 		AutoUpdate: cfg.Plugin.AutoUpdate,
-	}, log)
+	}, log, db, svc.Docker.GetClient())
 
 	// Load plugins
 	if err := pluginManager.LoadAll(); err != nil {
@@ -145,7 +145,7 @@ func main() {
 	defer cancel()
 
 	// Shutdown plugins
-	pluginManager.UnloadAll()
+	pluginManager.Shutdown()
 
 	// Shutdown server
 	if err := srv.Shutdown(ctx); err != nil {
@@ -230,11 +230,46 @@ func setupRoutes(r *gin.Engine, h *handlers.Handler, svc *services.Container, pm
 			docker.POST("/compose/:id/down", h.Docker.ComposeDown)
 		}
 
+		// Apps - GitHub Deploy
+		apps := api.Group("/apps")
+		{
+			apps.GET("", h.Apps.List)
+			apps.POST("", h.Apps.Create)
+			apps.GET("/:id", h.Apps.Get)
+			apps.PUT("/:id", h.Apps.Update)
+			apps.DELETE("/:id", h.Apps.Delete)
+
+			apps.POST("/:id/deploy", h.Apps.Deploy)
+			apps.POST("/:id/start", h.Apps.Start)
+			apps.POST("/:id/stop", h.Apps.Stop)
+			apps.POST("/:id/restart", h.Apps.Restart)
+			apps.GET("/:id/logs", h.Apps.Logs)
+
+			apps.GET("/:id/deployments", h.Apps.ListDeployments)
+			apps.GET("/:id/deployments/:did", h.Apps.GetDeployment)
+		}
+
 		// Nginx Management
 		nginx := api.Group("/nginx")
 		{
 			nginx.GET("/status", h.Nginx.Status)
 			nginx.POST("/reload", h.Nginx.Reload)
+
+			// Instance Management
+			nginx.GET("/instances", h.Nginx.ListInstances)
+			nginx.POST("/instances", h.Nginx.CreateInstance)
+			nginx.GET("/instances/discover", h.Nginx.DiscoverDockerNginx)
+			nginx.POST("/instances/deploy", h.Nginx.DeployDockerNginx)
+			nginx.GET("/instances/:id", h.Nginx.GetInstance)
+			nginx.PUT("/instances/:id", h.Nginx.UpdateInstance)
+			nginx.DELETE("/instances/:id", h.Nginx.DeleteInstance)
+			nginx.POST("/instances/:id/start", h.Nginx.StartInstance)
+			nginx.POST("/instances/:id/stop", h.Nginx.StopInstance)
+			nginx.POST("/instances/:id/reload", h.Nginx.ReloadInstance)
+			nginx.GET("/instances/:id/test", h.Nginx.TestInstanceConfig)
+			nginx.GET("/instances/:id/logs", h.Nginx.GetInstanceLogs)
+
+			// Site Management
 			nginx.GET("/sites", h.Nginx.ListSites)
 			nginx.POST("/sites", h.Nginx.CreateSite)
 			nginx.GET("/sites/:id", h.Nginx.GetSite)
@@ -243,11 +278,13 @@ func setupRoutes(r *gin.Engine, h *handlers.Handler, svc *services.Container, pm
 			nginx.POST("/sites/:id/enable", h.Nginx.EnableSite)
 			nginx.POST("/sites/:id/disable", h.Nginx.DisableSite)
 
+			// SSL Certificates
 			nginx.GET("/ssl/certificates", h.Nginx.ListCertificates)
 			nginx.POST("/ssl/certificates", h.Nginx.CreateCertificate)
 			nginx.DELETE("/ssl/certificates/:id", h.Nginx.DeleteCertificate)
 			nginx.POST("/ssl/certificates/:id/renew", h.Nginx.RenewCertificate)
 
+			// Logs & Analytics
 			nginx.GET("/logs/access", h.Nginx.AccessLogs)
 			nginx.GET("/logs/error", h.Nginx.ErrorLogs)
 			nginx.GET("/analytics", h.Nginx.Analytics)
@@ -259,6 +296,7 @@ func setupRoutes(r *gin.Engine, h *handlers.Handler, svc *services.Container, pm
 			database.GET("/servers", h.Database.ListServers)
 			database.POST("/servers", h.Database.CreateServer)
 			database.DELETE("/servers/:id", h.Database.DeleteServer)
+			database.GET("/deploy/:id", h.Database.GetDeployTask)
 			database.GET("/servers/:id/databases", h.Database.ListDatabases)
 			database.POST("/servers/:id/databases", h.Database.CreateDatabase)
 			database.DELETE("/servers/:id/databases/:db", h.Database.DeleteDatabase)
@@ -342,6 +380,8 @@ func setupRoutes(r *gin.Engine, h *handlers.Handler, svc *services.Container, pm
 		{
 			plugins.GET("/", h.Plugin.List)
 			plugins.GET("/market", h.Plugin.Market)
+			plugins.GET("/menus", h.Plugin.GetMenus)
+			plugins.GET("/pages", h.Plugin.GetPages)
 			plugins.POST("/install", h.Plugin.Install)
 			plugins.POST("/:id/uninstall", h.Plugin.Uninstall)
 			plugins.POST("/:id/enable", h.Plugin.Enable)
@@ -402,6 +442,9 @@ func setupRoutes(r *gin.Engine, h *handlers.Handler, svc *services.Container, pm
 	pluginAPI := r.Group("/api/plugin")
 	pluginAPI.Use(middleware.Auth(svc.Auth))
 	pm.RegisterRoutes(pluginAPI)
+
+	// Plugin static file routes
+	pm.ServePluginStatic(pluginAPI)
 
 	// WebSocket endpoints
 	ws := r.Group("/ws")

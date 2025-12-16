@@ -6,6 +6,7 @@ import { cn } from '@/utils/cn';
 import {
   LayoutDashboard,
   Container,
+  Rocket,
   Globe,
   Database,
   FolderOpen,
@@ -19,17 +20,36 @@ import {
   ChevronDown,
   ChevronLeft,
   ChevronRight,
+  type LucideIcon,
 } from 'lucide-react';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
+import * as pluginsApi from '@/api/plugins';
 
 interface MenuItem {
   title: string;
   icon: React.ElementType;
   path?: string;
   children?: { title: string; path: string }[];
+  isPlugin?: boolean;
 }
 
-const menuItems: MenuItem[] = [
+// Icon mapping for plugin icons
+const iconMap: Record<string, LucideIcon> = {
+  puzzle: Puzzle,
+  container: Container,
+  rocket: Rocket,
+  globe: Globe,
+  database: Database,
+  folder: FolderOpen,
+  terminal: Terminal,
+  clock: Clock,
+  shield: Shield,
+  package: Package,
+  settings: Settings,
+  file: FileText,
+};
+
+const staticMenuItems: MenuItem[] = [
   { title: 'Dashboard', icon: LayoutDashboard, path: '/' },
   {
     title: 'Docker',
@@ -43,9 +63,18 @@ const menuItems: MenuItem[] = [
     ],
   },
   {
+    title: 'Apps',
+    icon: Rocket,
+    children: [
+      { title: 'All Apps', path: '/apps' },
+      { title: 'Deploy New', path: '/apps/create' },
+    ],
+  },
+  {
     title: 'Nginx',
     icon: Globe,
     children: [
+      { title: 'Instances', path: '/nginx/instances' },
       { title: 'Sites', path: '/nginx/sites' },
       { title: 'Certificates', path: '/nginx/certificates' },
       { title: 'Logs', path: '/nginx/logs' },
@@ -90,7 +119,48 @@ export default function Sidebar() {
   const { sidebarCollapsed, setSidebarCollapsed } = useUIStore();
   const resolvedMode = useThemeStore((state) => state.resolvedMode);
   const [expandedItems, setExpandedItems] = useState<string[]>([]);
+  const [pluginMenus, setPluginMenus] = useState<pluginsApi.PluginMenuResponse[]>([]);
   const isLight = resolvedMode === 'light';
+
+  // Fetch plugin menus on mount
+  useEffect(() => {
+    async function fetchPluginMenus() {
+      try {
+        const menus = await pluginsApi.getPluginMenus();
+        setPluginMenus(menus || []);
+      } catch (error) {
+        console.error('Failed to load plugin menus:', error);
+      }
+    }
+    fetchPluginMenus();
+  }, []);
+
+  // Combine static menus with plugin menus
+  const menuItems = useMemo(() => {
+    const items = [...staticMenuItems];
+
+    // Find the Plugins menu item and add plugin pages as children
+    const pluginsIndex = items.findIndex((item) => item.title === 'Plugins');
+    if (pluginsIndex !== -1 && pluginMenus.length > 0) {
+      const pluginsMenu = { ...items[pluginsIndex] };
+      const pluginChildren = pluginMenus.flatMap((pm) =>
+        pm.menus.map((menu) => ({
+          title: menu.title,
+          path: menu.path || `/plugins/${pm.plugin_id}`,
+        }))
+      );
+
+      if (pluginChildren.length > 0) {
+        pluginsMenu.children = [
+          ...(pluginsMenu.children || []),
+          ...pluginChildren,
+        ];
+      }
+      items[pluginsIndex] = pluginsMenu;
+    }
+
+    return items;
+  }, [pluginMenus]);
 
   // Auto-expand menu items that contain the current active path
   useEffect(() => {

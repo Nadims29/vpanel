@@ -32,6 +32,7 @@ type Handler struct {
 	Dashboard *DashboardHandler
 	Monitor   *MonitorHandler
 	Docker    *DockerHandler
+	Apps      *AppsHandler
 	Nginx     *NginxHandler
 	Database  *DatabaseHandler
 	File      *FileHandler
@@ -56,6 +57,7 @@ func New(svc *services.Container, log *logger.Logger, pm *plugin.Manager) *Handl
 	h.Dashboard = &DashboardHandler{svc: svc, log: log}
 	h.Monitor = &MonitorHandler{svc: svc, log: log}
 	h.Docker = &DockerHandler{svc: svc, log: log}
+	h.Apps = &AppsHandler{svc: svc, log: log}
 	h.Nginx = &NginxHandler{svc: svc, log: log}
 	h.Database = &DatabaseHandler{svc: svc, log: log}
 	h.File = &FileHandler{svc: svc, log: log}
@@ -376,11 +378,21 @@ type DockerHandler struct {
 	log *logger.Logger
 }
 
+// handleDockerError returns appropriate response based on error type
+func (h *DockerHandler) handleDockerError(c *gin.Context, operation string, err error) {
+	if err == services.ErrDockerNotConnected {
+		response.ServiceUnavailable(c, "Docker environment is not available. Please ensure Docker is running and accessible.")
+		return
+	}
+	h.log.Error(operation+" failed", "error", err)
+	response.InternalError(c, operation+" failed: "+err.Error())
+}
+
 func (h *DockerHandler) Info(c *gin.Context) {
 	ctx := context.Background()
 	info, err := h.svc.Docker.GetInfo(ctx)
 	if err != nil {
-		response.InternalError(c, "Failed to get Docker info: "+err.Error())
+		h.handleDockerError(c, "Get Docker info", err)
 		return
 	}
 	response.Success(c, info)
@@ -392,7 +404,7 @@ func (h *DockerHandler) ListContainers(c *gin.Context) {
 
 	containers, err := h.svc.Docker.ListContainers(ctx, all)
 	if err != nil {
-		response.InternalError(c, "Failed to list containers: "+err.Error())
+		h.handleDockerError(c, "List containers", err)
 		return
 	}
 	response.Success(c, containers)
@@ -408,7 +420,7 @@ func (h *DockerHandler) CreateContainer(c *gin.Context) {
 
 	id, err := h.svc.Docker.CreateContainer(ctx, &req)
 	if err != nil {
-		response.InternalError(c, "Failed to create container: "+err.Error())
+		h.handleDockerError(c, "Create container", err)
 		return
 	}
 
@@ -424,6 +436,10 @@ func (h *DockerHandler) GetContainer(c *gin.Context) {
 
 	container, err := h.svc.Docker.GetContainer(ctx, id)
 	if err != nil {
+		if err == services.ErrDockerNotConnected {
+			h.handleDockerError(c, "Get container", err)
+			return
+		}
 		response.NotFound(c, "Container not found")
 		return
 	}
@@ -436,7 +452,7 @@ func (h *DockerHandler) RemoveContainer(c *gin.Context) {
 	force := c.Query("force") == "true"
 
 	if err := h.svc.Docker.RemoveContainer(ctx, id, force); err != nil {
-		response.InternalError(c, "Failed to remove container: "+err.Error())
+		h.handleDockerError(c, "Remove container", err)
 		return
 	}
 	response.NoContent(c)
@@ -447,7 +463,7 @@ func (h *DockerHandler) StartContainer(c *gin.Context) {
 	id := c.Param("id")
 
 	if err := h.svc.Docker.StartContainer(ctx, id); err != nil {
-		response.InternalError(c, "Failed to start container: "+err.Error())
+		h.handleDockerError(c, "Start container", err)
 		return
 	}
 	response.Success(c, nil)
@@ -458,7 +474,7 @@ func (h *DockerHandler) StopContainer(c *gin.Context) {
 	id := c.Param("id")
 
 	if err := h.svc.Docker.StopContainer(ctx, id); err != nil {
-		response.InternalError(c, "Failed to stop container: "+err.Error())
+		h.handleDockerError(c, "Stop container", err)
 		return
 	}
 	response.Success(c, nil)
@@ -469,7 +485,7 @@ func (h *DockerHandler) RestartContainer(c *gin.Context) {
 	id := c.Param("id")
 
 	if err := h.svc.Docker.RestartContainer(ctx, id); err != nil {
-		response.InternalError(c, "Failed to restart container: "+err.Error())
+		h.handleDockerError(c, "Restart container", err)
 		return
 	}
 	response.Success(c, nil)
@@ -482,7 +498,7 @@ func (h *DockerHandler) ContainerLogs(c *gin.Context) {
 
 	logs, err := h.svc.Docker.GetContainerLogs(ctx, id, tail, true)
 	if err != nil {
-		response.InternalError(c, "Failed to get logs: "+err.Error())
+		h.handleDockerError(c, "Get container logs", err)
 		return
 	}
 	response.Success(c, logs)
@@ -494,7 +510,7 @@ func (h *DockerHandler) ContainerStats(c *gin.Context) {
 
 	stats, err := h.svc.Docker.GetContainerStats(ctx, id)
 	if err != nil {
-		response.InternalError(c, "Failed to get stats: "+err.Error())
+		h.handleDockerError(c, "Get container stats", err)
 		return
 	}
 	response.Success(c, stats)
@@ -506,7 +522,7 @@ func (h *DockerHandler) ListImages(c *gin.Context) {
 	ctx := context.Background()
 	images, err := h.svc.Docker.ListImages(ctx)
 	if err != nil {
-		response.InternalError(c, "Failed to list images: "+err.Error())
+		h.handleDockerError(c, "List images", err)
 		return
 	}
 	response.Success(c, images)
@@ -523,7 +539,7 @@ func (h *DockerHandler) PullImage(c *gin.Context) {
 	}
 
 	if err := h.svc.Docker.PullImage(ctx, req.Image); err != nil {
-		response.InternalError(c, "Failed to pull image: "+err.Error())
+		h.handleDockerError(c, "Pull image", err)
 		return
 	}
 	response.Success(c, nil)
@@ -535,7 +551,7 @@ func (h *DockerHandler) RemoveImage(c *gin.Context) {
 	force := c.Query("force") == "true"
 
 	if err := h.svc.Docker.RemoveImage(ctx, id, force); err != nil {
-		response.InternalError(c, "Failed to remove image: "+err.Error())
+		h.handleDockerError(c, "Remove image", err)
 		return
 	}
 	response.NoContent(c)
@@ -547,7 +563,7 @@ func (h *DockerHandler) ListNetworks(c *gin.Context) {
 	ctx := context.Background()
 	networks, err := h.svc.Docker.ListNetworks(ctx)
 	if err != nil {
-		response.InternalError(c, "Failed to list networks: "+err.Error())
+		h.handleDockerError(c, "List networks", err)
 		return
 	}
 	response.Success(c, networks)
@@ -570,7 +586,7 @@ func (h *DockerHandler) CreateNetwork(c *gin.Context) {
 
 	id, err := h.svc.Docker.CreateNetwork(ctx, req.Name, req.Driver)
 	if err != nil {
-		response.InternalError(c, "Failed to create network: "+err.Error())
+		h.handleDockerError(c, "Create network", err)
 		return
 	}
 	response.Created(c, gin.H{"id": id})
@@ -581,7 +597,7 @@ func (h *DockerHandler) RemoveNetwork(c *gin.Context) {
 	id := c.Param("id")
 
 	if err := h.svc.Docker.RemoveNetwork(ctx, id); err != nil {
-		response.InternalError(c, "Failed to remove network: "+err.Error())
+		h.handleDockerError(c, "Remove network", err)
 		return
 	}
 	response.NoContent(c)
@@ -591,7 +607,7 @@ func (h *DockerHandler) ListVolumes(c *gin.Context) {
 	ctx := context.Background()
 	volumes, err := h.svc.Docker.ListVolumes(ctx)
 	if err != nil {
-		response.InternalError(c, "Failed to list volumes: "+err.Error())
+		h.handleDockerError(c, "List volumes", err)
 		return
 	}
 	response.Success(c, volumes)
@@ -614,7 +630,7 @@ func (h *DockerHandler) CreateVolume(c *gin.Context) {
 
 	vol, err := h.svc.Docker.CreateVolume(ctx, req.Name, req.Driver)
 	if err != nil {
-		response.InternalError(c, "Failed to create volume: "+err.Error())
+		h.handleDockerError(c, "Create volume", err)
 		return
 	}
 	response.Created(c, vol)
@@ -626,7 +642,7 @@ func (h *DockerHandler) RemoveVolume(c *gin.Context) {
 	force := c.Query("force") == "true"
 
 	if err := h.svc.Docker.RemoveVolume(ctx, id, force); err != nil {
-		response.InternalError(c, "Failed to remove volume: "+err.Error())
+		h.handleDockerError(c, "Remove volume", err)
 		return
 	}
 	response.NoContent(c)
@@ -636,7 +652,7 @@ func (h *DockerHandler) ListComposeProjects(c *gin.Context) {
 	ctx := context.Background()
 	projects, err := h.svc.Docker.ListComposeProjects(ctx)
 	if err != nil {
-		response.InternalError(c, "Failed to list compose projects: "+err.Error())
+		h.handleDockerError(c, "List compose projects", err)
 		return
 	}
 	response.Success(c, projects)
@@ -657,7 +673,7 @@ func (h *DockerHandler) CreateComposeProject(c *gin.Context) {
 
 	project, err := h.svc.Docker.CreateComposeProject(ctx, req.Name, req.Path, req.Content, req.Description)
 	if err != nil {
-		response.InternalError(c, "Failed to create compose project: "+err.Error())
+		h.handleDockerError(c, "Create compose project", err)
 		return
 	}
 	response.Created(c, project)
@@ -668,7 +684,7 @@ func (h *DockerHandler) RemoveComposeProject(c *gin.Context) {
 	id := c.Param("id")
 
 	if err := h.svc.Docker.RemoveComposeProject(ctx, id); err != nil {
-		response.InternalError(c, "Failed to remove compose project: "+err.Error())
+		h.handleDockerError(c, "Remove compose project", err)
 		return
 	}
 	response.NoContent(c)
@@ -679,7 +695,7 @@ func (h *DockerHandler) ComposeUp(c *gin.Context) {
 	id := c.Param("id")
 
 	if err := h.svc.Docker.ComposeUp(ctx, id); err != nil {
-		response.InternalError(c, "Failed to start compose project: "+err.Error())
+		h.handleDockerError(c, "Start compose project", err)
 		return
 	}
 	response.Success(c, gin.H{"message": "Compose project started"})
@@ -690,13 +706,182 @@ func (h *DockerHandler) ComposeDown(c *gin.Context) {
 	id := c.Param("id")
 
 	if err := h.svc.Docker.ComposeDown(ctx, id); err != nil {
-		response.InternalError(c, "Failed to stop compose project: "+err.Error())
+		h.handleDockerError(c, "Stop compose project", err)
 		return
 	}
 	response.Success(c, gin.H{"message": "Compose project stopped"})
 }
 func (h *DockerHandler) ContainerLogsWS(c *gin.Context)  { /* WebSocket */ }
 func (h *DockerHandler) ContainerStatsWS(c *gin.Context) { /* WebSocket */ }
+
+// ============================================
+// Apps Handler (GitHub Deploy)
+// ============================================
+
+type AppsHandler struct {
+	svc *services.Container
+	log *logger.Logger
+}
+
+// List returns all apps
+func (h *AppsHandler) List(c *gin.Context) {
+	apps, err := h.svc.Apps.ListApps()
+	if err != nil {
+		h.log.Error("Failed to list apps", "error", err)
+		response.InternalError(c, "Failed to list apps")
+		return
+	}
+	response.Success(c, apps)
+}
+
+// Create creates a new app
+func (h *AppsHandler) Create(c *gin.Context) {
+	var req services.CreateAppRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, "Invalid request data")
+		return
+	}
+
+	app, err := h.svc.Apps.CreateApp(&req)
+	if err != nil {
+		if strings.Contains(err.Error(), "UNIQUE constraint") || strings.Contains(err.Error(), "duplicate") {
+			response.Conflict(c, "App with this name already exists")
+			return
+		}
+		h.log.Error("Failed to create app", "error", err)
+		response.InternalError(c, "Failed to create app: "+err.Error())
+		return
+	}
+
+	response.Created(c, app)
+}
+
+// Get returns an app by ID
+func (h *AppsHandler) Get(c *gin.Context) {
+	id := c.Param("id")
+	app, err := h.svc.Apps.GetApp(id)
+	if err != nil {
+		response.NotFound(c, "App not found")
+		return
+	}
+	response.Success(c, app)
+}
+
+// Update updates an app
+func (h *AppsHandler) Update(c *gin.Context) {
+	id := c.Param("id")
+	var updates map[string]interface{}
+	if err := c.ShouldBindJSON(&updates); err != nil {
+		response.BadRequest(c, "Invalid request data")
+		return
+	}
+
+	app, err := h.svc.Apps.UpdateApp(id, updates)
+	if err != nil {
+		h.log.Error("Failed to update app", "id", id, "error", err)
+		response.InternalError(c, "Failed to update app")
+		return
+	}
+
+	response.Success(c, app)
+}
+
+// Delete deletes an app
+func (h *AppsHandler) Delete(c *gin.Context) {
+	id := c.Param("id")
+	if err := h.svc.Apps.DeleteApp(id); err != nil {
+		h.log.Error("Failed to delete app", "id", id, "error", err)
+		response.InternalError(c, "Failed to delete app")
+		return
+	}
+	response.NoContent(c)
+}
+
+// Deploy triggers a deployment
+func (h *AppsHandler) Deploy(c *gin.Context) {
+	id := c.Param("id")
+	deployment, err := h.svc.Apps.DeployApp(id)
+	if err != nil {
+		if strings.Contains(err.Error(), "not found") {
+			response.NotFound(c, "App not found")
+			return
+		}
+		h.log.Error("Failed to start deployment", "id", id, "error", err)
+		response.InternalError(c, "Failed to start deployment: "+err.Error())
+		return
+	}
+	response.Success(c, deployment)
+}
+
+// Start starts an app's container
+func (h *AppsHandler) Start(c *gin.Context) {
+	id := c.Param("id")
+	if err := h.svc.Apps.StartApp(id); err != nil {
+		h.log.Error("Failed to start app", "id", id, "error", err)
+		response.InternalError(c, "Failed to start app: "+err.Error())
+		return
+	}
+	response.Success(c, gin.H{"message": "App started"})
+}
+
+// Stop stops an app's container
+func (h *AppsHandler) Stop(c *gin.Context) {
+	id := c.Param("id")
+	if err := h.svc.Apps.StopApp(id); err != nil {
+		h.log.Error("Failed to stop app", "id", id, "error", err)
+		response.InternalError(c, "Failed to stop app: "+err.Error())
+		return
+	}
+	response.Success(c, gin.H{"message": "App stopped"})
+}
+
+// Restart restarts an app's container
+func (h *AppsHandler) Restart(c *gin.Context) {
+	id := c.Param("id")
+	if err := h.svc.Apps.RestartApp(id); err != nil {
+		h.log.Error("Failed to restart app", "id", id, "error", err)
+		response.InternalError(c, "Failed to restart app: "+err.Error())
+		return
+	}
+	response.Success(c, gin.H{"message": "App restarted"})
+}
+
+// Logs returns the app's container logs
+func (h *AppsHandler) Logs(c *gin.Context) {
+	id := c.Param("id")
+	tail, _ := strconv.Atoi(c.DefaultQuery("tail", "500"))
+
+	logs, err := h.svc.Apps.GetAppLogs(id, tail)
+	if err != nil {
+		h.log.Error("Failed to get app logs", "id", id, "error", err)
+		response.InternalError(c, "Failed to get app logs: "+err.Error())
+		return
+	}
+	response.Success(c, gin.H{"logs": logs})
+}
+
+// ListDeployments returns all deployments for an app
+func (h *AppsHandler) ListDeployments(c *gin.Context) {
+	id := c.Param("id")
+	deployments, err := h.svc.Apps.ListDeployments(id)
+	if err != nil {
+		h.log.Error("Failed to list deployments", "app_id", id, "error", err)
+		response.InternalError(c, "Failed to list deployments")
+		return
+	}
+	response.Success(c, deployments)
+}
+
+// GetDeployment returns a deployment by ID
+func (h *AppsHandler) GetDeployment(c *gin.Context) {
+	did := c.Param("did")
+	deployment, err := h.svc.Apps.GetDeployment(did)
+	if err != nil {
+		response.NotFound(c, "Deployment not found")
+		return
+	}
+	response.Success(c, deployment)
+}
 
 // ============================================
 // Nginx Handler
@@ -722,6 +907,164 @@ func (h *NginxHandler) Reload(c *gin.Context) {
 		return
 	}
 	response.Success(c, gin.H{"message": "Nginx reloaded successfully"})
+}
+
+// ============================================
+// Instance Management
+// ============================================
+
+func (h *NginxHandler) ListInstances(c *gin.Context) {
+	nodeID := c.Query("node_id")
+	instances, err := h.svc.Nginx.ListInstances(nodeID)
+	if err != nil {
+		response.InternalError(c, "Failed to list instances: "+err.Error())
+		return
+	}
+	response.Success(c, instances)
+}
+
+func (h *NginxHandler) GetInstance(c *gin.Context) {
+	id := c.Param("id")
+	instance, err := h.svc.Nginx.GetInstance(id)
+	if err != nil {
+		response.NotFound(c, "Instance not found")
+		return
+	}
+	response.Success(c, instance)
+}
+
+func (h *NginxHandler) CreateInstance(c *gin.Context) {
+	var instance models.NginxInstance
+	if err := c.ShouldBindJSON(&instance); err != nil {
+		response.BadRequest(c, "Invalid request data")
+		return
+	}
+
+	if err := h.svc.Nginx.CreateInstance(&instance); err != nil {
+		if strings.Contains(err.Error(), "required") {
+			response.BadRequest(c, err.Error())
+			return
+		}
+		response.InternalError(c, "Failed to create instance: "+err.Error())
+		return
+	}
+	response.Created(c, instance)
+}
+
+func (h *NginxHandler) UpdateInstance(c *gin.Context) {
+	id := c.Param("id")
+	var updates map[string]interface{}
+	if err := c.ShouldBindJSON(&updates); err != nil {
+		response.BadRequest(c, "Invalid request data")
+		return
+	}
+
+	if err := h.svc.Nginx.UpdateInstance(id, updates); err != nil {
+		response.InternalError(c, "Failed to update instance: "+err.Error())
+		return
+	}
+
+	instance, err := h.svc.Nginx.GetInstance(id)
+	if err != nil {
+		response.InternalError(c, "Failed to get updated instance")
+		return
+	}
+	response.Success(c, instance)
+}
+
+func (h *NginxHandler) DeleteInstance(c *gin.Context) {
+	id := c.Param("id")
+	if err := h.svc.Nginx.DeleteInstance(id); err != nil {
+		if strings.Contains(err.Error(), "cannot delete") {
+			response.BadRequest(c, err.Error())
+			return
+		}
+		response.InternalError(c, "Failed to delete instance: "+err.Error())
+		return
+	}
+	response.NoContent(c)
+}
+
+func (h *NginxHandler) StartInstance(c *gin.Context) {
+	id := c.Param("id")
+	if err := h.svc.Nginx.StartInstance(id); err != nil {
+		response.InternalError(c, "Failed to start instance: "+err.Error())
+		return
+	}
+	response.Success(c, gin.H{"message": "Instance started"})
+}
+
+func (h *NginxHandler) StopInstance(c *gin.Context) {
+	id := c.Param("id")
+	if err := h.svc.Nginx.StopInstance(id); err != nil {
+		response.InternalError(c, "Failed to stop instance: "+err.Error())
+		return
+	}
+	response.Success(c, gin.H{"message": "Instance stopped"})
+}
+
+func (h *NginxHandler) ReloadInstance(c *gin.Context) {
+	id := c.Param("id")
+	if err := h.svc.Nginx.ReloadInstance(id); err != nil {
+		response.InternalError(c, "Failed to reload instance: "+err.Error())
+		return
+	}
+	response.Success(c, gin.H{"message": "Instance reloaded"})
+}
+
+func (h *NginxHandler) TestInstanceConfig(c *gin.Context) {
+	id := c.Param("id")
+	valid, output, err := h.svc.Nginx.TestInstanceConfig(id)
+	if err != nil {
+		response.InternalError(c, "Failed to test config: "+err.Error())
+		return
+	}
+	response.Success(c, gin.H{
+		"valid":  valid,
+		"output": output,
+	})
+}
+
+func (h *NginxHandler) DiscoverDockerNginx(c *gin.Context) {
+	containers, err := h.svc.Nginx.DiscoverDockerNginx()
+	if err != nil {
+		response.InternalError(c, "Failed to discover Docker nginx: "+err.Error())
+		return
+	}
+	response.Success(c, containers)
+}
+
+func (h *NginxHandler) DeployDockerNginx(c *gin.Context) {
+	var req struct {
+		Name    string            `json:"name"`
+		Image   string            `json:"image"`
+		Ports   map[int]int       `json:"ports"`
+		Volumes map[string]string `json:"volumes"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, "Invalid request data")
+		return
+	}
+
+	instance, err := h.svc.Nginx.DeployDockerNginx(req.Name, req.Image, req.Ports, req.Volumes)
+	if err != nil {
+		response.InternalError(c, "Failed to deploy Docker nginx: "+err.Error())
+		return
+	}
+	response.Created(c, instance)
+}
+
+func (h *NginxHandler) GetInstanceLogs(c *gin.Context) {
+	id := c.Param("id")
+	logType := c.DefaultQuery("type", "access")
+	lines, _ := strconv.Atoi(c.DefaultQuery("lines", "100"))
+
+	logs, err := h.svc.Nginx.GetInstanceLogs(id, logType, lines)
+	if err != nil {
+		response.InternalError(c, "Failed to get instance logs: "+err.Error())
+		return
+	}
+	response.Success(c, gin.H{"logs": logs})
 }
 
 func (h *NginxHandler) ListSites(c *gin.Context) {
@@ -915,8 +1258,28 @@ func (h *DatabaseHandler) ListServers(c *gin.Context) {
 	response.Success(c, servers)
 }
 
+// CreateServerRequest represents the request for creating a database server
+type CreateServerRequest struct {
+	// Common fields
+	Name string `json:"name"`
+	Type string `json:"type"`
+
+	// Mode: "connect" for connecting to existing, "create" for creating local
+	Mode string `json:"mode"`
+
+	// Connect mode fields
+	Host     string `json:"host"`
+	Port     int    `json:"port"`
+	Username string `json:"username"`
+	Password string `json:"password"`
+
+	// Create mode fields
+	RootPassword string `json:"root_password"`
+	Version      string `json:"version"`
+}
+
 func (h *DatabaseHandler) CreateServer(c *gin.Context) {
-	var req models.DatabaseServer
+	var req CreateServerRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		response.BadRequest(c, "Invalid request data")
 		return
@@ -931,6 +1294,36 @@ func (h *DatabaseHandler) CreateServer(c *gin.Context) {
 		response.BadRequest(c, "Database type is required")
 		return
 	}
+
+	// Handle based on mode
+	if req.Mode == "create" {
+		// Create local server using Docker (async deployment)
+		if req.RootPassword == "" && req.Type != "redis" {
+			response.BadRequest(c, "Root password is required for local database")
+			return
+		}
+
+		localReq := &services.CreateLocalServerRequest{
+			Name:         req.Name,
+			Type:         req.Type,
+			Port:         req.Port,
+			RootPassword: req.RootPassword,
+			Version:      req.Version,
+		}
+
+		// Start async deployment and return task ID
+		task, err := h.svc.Database.DeployDatabaseServer(localReq)
+		if err != nil {
+			h.log.Error("Failed to start database deployment", "error", err)
+			response.BadRequest(c, "Failed to start database deployment: "+err.Error())
+			return
+		}
+
+		response.Created(c, task)
+		return
+	}
+
+	// Default: Connect to existing server
 	if req.Host == "" {
 		response.BadRequest(c, "Host is required")
 		return
@@ -940,13 +1333,22 @@ func (h *DatabaseHandler) CreateServer(c *gin.Context) {
 		return
 	}
 
-	if err := h.svc.Database.CreateServer(&req); err != nil {
+	server := &models.DatabaseServer{
+		Name:     req.Name,
+		Type:     req.Type,
+		Host:     req.Host,
+		Port:     req.Port,
+		Username: req.Username,
+		Password: req.Password,
+	}
+
+	if err := h.svc.Database.CreateServer(server); err != nil {
 		h.log.Error("Failed to create database server", "error", err)
 		response.BadRequest(c, "Failed to create database server: "+err.Error())
 		return
 	}
 
-	response.Created(c, req)
+	response.Created(c, server)
 }
 
 func (h *DatabaseHandler) DeleteServer(c *gin.Context) {
@@ -963,6 +1365,23 @@ func (h *DatabaseHandler) DeleteServer(c *gin.Context) {
 	}
 
 	response.NoContent(c)
+}
+
+func (h *DatabaseHandler) GetDeployTask(c *gin.Context) {
+	id := c.Param("id")
+	if id == "" {
+		response.BadRequest(c, "Task ID is required")
+		return
+	}
+
+	task, err := h.svc.Database.GetDeployTask(id)
+	if err != nil {
+		h.log.Error("Failed to get deploy task", "id", id, "error", err)
+		response.NotFound(c, "Deploy task not found")
+		return
+	}
+
+	response.Success(c, task)
 }
 
 func (h *DatabaseHandler) ListDatabases(c *gin.Context) {
@@ -2009,6 +2428,18 @@ func (h *PluginHandler) UpdateSettings(c *gin.Context) {
 		"message":  "Settings updated successfully",
 		"settings": req.Settings,
 	})
+}
+
+// GetMenus returns all menus from enabled plugins
+func (h *PluginHandler) GetMenus(c *gin.Context) {
+	menus := h.pluginManager.GetPluginMenus()
+	response.Success(c, menus)
+}
+
+// GetPages returns all pages from enabled plugins
+func (h *PluginHandler) GetPages(c *gin.Context) {
+	pages := h.pluginManager.GetPluginPages()
+	response.Success(c, pages)
 }
 
 // ============================================

@@ -3,16 +3,22 @@ package services
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"strconv"
 	"strings"
 	"text/template"
 	"time"
 
+	"github.com/docker/docker/api/types/container"
+	"github.com/docker/docker/api/types/filters"
+	dockerimage "github.com/docker/docker/api/types/image"
+	"github.com/docker/docker/client"
 	"github.com/vpanel/server/internal/models"
 	"github.com/vpanel/server/pkg/logger"
 	"gorm.io/gorm"
@@ -20,69 +26,681 @@ import (
 
 // NginxService manages Nginx configuration
 type NginxService struct {
-	db  *gorm.DB
-	log *logger.Logger
+	db           *gorm.DB
+	log          *logger.Logger
+	dockerClient *client.Client
 }
 
 // NewNginxService creates a new nginx service
 func NewNginxService(db *gorm.DB, log *logger.Logger) *NginxService {
-	return &NginxService{db: db, log: log}
+	svc := &NginxService{db: db, log: log}
+	
+	// Try to connect to Docker
+	cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
+	if err == nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if _, err := cli.Ping(ctx); err == nil {
+			svc.dockerClient = cli
+			log.Info("Docker client connected for Nginx service")
+		}
+	}
+	
+	// Initialize default local instance if not exists
+	svc.initDefaultInstance()
+	
+	return svc
 }
 
-// GetStatus returns nginx status
-func (s *NginxService) GetStatus() (map[string]interface{}, error) {
-	// Check if nginx is running
-	cmd := exec.Command("nginx", "-t")
-	var stderr bytes.Buffer
-	cmd.Stderr = &stderr
-	err := cmd.Run()
+// initDefaultInstance creates a default local nginx instance if none exists
+func (s *NginxService) initDefaultInstance() {
+	var count int64
+	s.db.Model(&models.NginxInstance{}).Count(&count)
+	if count == 0 {
+		// Check if nginx is installed locally
+		nginxPath, err := exec.LookPath("nginx")
+		if err == nil && nginxPath != "" {
+			instance := &models.NginxInstance{
+				Name:         "Local Nginx",
+				Type:         models.NginxInstanceTypeLocal,
+				Description:  "System-installed Nginx",
+				ConfigPath:   "/etc/nginx",
+				SitesPath:    "/etc/nginx/sites-available",
+				SitesEnabled: "/etc/nginx/sites-enabled",
+				LogPath:      "/var/log/nginx",
+				IsDefault:    true,
+			}
+			if err := s.db.Create(instance).Error; err == nil {
+				s.log.Info("Created default local nginx instance", "id", instance.ID)
+			}
+		}
+	}
+}
 
-	isValid := err == nil
+// GetStatus returns nginx status (for default instance)
+func (s *NginxService) GetStatus() (map[string]interface{}, error) {
+	// Check if nginx is installed
+	nginxPath, err := exec.LookPath("nginx")
+	isInstalled := err == nil && nginxPath != ""
+	
+	// Also check Docker nginx containers
+	var dockerInstances int64
+	s.db.Model(&models.NginxInstance{}).Where("type = ?", models.NginxInstanceTypeDocker).Count(&dockerInstances)
+
+	// If not installed locally and no docker instances, return early
+	if !isInstalled && dockerInstances == 0 {
+		return map[string]interface{}{
+			"installed":        false,
+			"running":          false,
+			"config_valid":     false,
+			"error":            "nginx is not installed",
+			"total_sites":      0,
+			"enabled_sites":    0,
+			"total_instances":  0,
+			"docker_available": s.dockerClient != nil,
+			"os":               runtime.GOOS,
+		}, nil
+	}
+
+	// Check if nginx config is valid
+	isValid := true
 	errorMsg := ""
-	if !isValid {
-		errorMsg = stderr.String()
+	if isInstalled {
+		cmd := exec.Command("nginx", "-t")
+		var stderr bytes.Buffer
+		cmd.Stderr = &stderr
+		err = cmd.Run()
+		isValid = err == nil
+		if !isValid {
+			errorMsg = stderr.String()
+		}
 	}
 
 	// Check if nginx process is running
 	isRunning := false
-	cmd = exec.Command("pgrep", "-x", "nginx")
-	if err := cmd.Run(); err == nil {
-		isRunning = true
+	if isInstalled {
+		cmd := exec.Command("pgrep", "-x", "nginx")
+		if err := cmd.Run(); err == nil {
+			isRunning = true
+		}
 	}
 
-	// Count sites
-	var totalSites, enabledSites int64
+	// Count sites and instances
+	var totalSites, enabledSites, totalInstances int64
 	s.db.Model(&models.NginxSite{}).Count(&totalSites)
 	s.db.Model(&models.NginxSite{}).Where("enabled = ?", true).Count(&enabledSites)
+	s.db.Model(&models.NginxInstance{}).Count(&totalInstances)
 
 	return map[string]interface{}{
-		"running":       isRunning,
-		"config_valid":  isValid,
-		"error":         errorMsg,
-		"total_sites":   totalSites,
-		"enabled_sites": enabledSites,
+		"installed":        isInstalled || dockerInstances > 0,
+		"local_installed":  isInstalled,
+		"running":          isRunning,
+		"config_valid":     isValid,
+		"error":            errorMsg,
+		"total_sites":      totalSites,
+		"enabled_sites":    enabledSites,
+		"total_instances":  totalInstances,
+		"docker_instances": dockerInstances,
+		"docker_available": s.dockerClient != nil,
+		"os":               runtime.GOOS,
 	}, nil
 }
 
-// Reload reloads nginx configuration
-func (s *NginxService) Reload() error {
-	cmd := exec.Command("nginx", "-s", "reload")
-	if err := cmd.Run(); err != nil {
-		s.log.Error("Failed to reload nginx", "error", err)
-		return fmt.Errorf("failed to reload nginx: %w", err)
+// ===============================
+// Instance Management
+// ===============================
+
+// ListInstances returns all nginx instances
+func (s *NginxService) ListInstances(nodeID string) ([]models.NginxInstance, error) {
+	var instances []models.NginxInstance
+	query := s.db.Order("is_default DESC, created_at ASC")
+
+	if nodeID != "" {
+		query = query.Where("node_id = ?", nodeID)
 	}
-	s.log.Info("Nginx reloaded successfully")
+
+	if err := query.Find(&instances).Error; err != nil {
+		return nil, err
+	}
+
+	// Update status for each instance
+	for i := range instances {
+		s.updateInstanceStatus(&instances[i])
+	}
+
+	return instances, nil
+}
+
+// GetInstance returns an instance by ID
+func (s *NginxService) GetInstance(id string) (*models.NginxInstance, error) {
+	var instance models.NginxInstance
+	if err := s.db.First(&instance, "id = ?", id).Error; err != nil {
+		return nil, err
+	}
+	s.updateInstanceStatus(&instance)
+	return &instance, nil
+}
+
+// GetDefaultInstance returns the default nginx instance
+func (s *NginxService) GetDefaultInstance() (*models.NginxInstance, error) {
+	var instance models.NginxInstance
+	if err := s.db.First(&instance, "is_default = ?", true).Error; err != nil {
+		// If no default, try to get the first one
+		if err := s.db.First(&instance).Error; err != nil {
+			return nil, err
+		}
+	}
+	s.updateInstanceStatus(&instance)
+	return &instance, nil
+}
+
+// CreateInstance creates a new nginx instance
+func (s *NginxService) CreateInstance(instance *models.NginxInstance) error {
+	if instance.Name == "" {
+		return fmt.Errorf("instance name is required")
+	}
+
+	// Set defaults based on type
+	if instance.Type == models.NginxInstanceTypeLocal {
+		if instance.ConfigPath == "" {
+			instance.ConfigPath = "/etc/nginx"
+		}
+		if instance.SitesPath == "" {
+			instance.SitesPath = "/etc/nginx/sites-available"
+		}
+		if instance.SitesEnabled == "" {
+			instance.SitesEnabled = "/etc/nginx/sites-enabled"
+		}
+		if instance.LogPath == "" {
+			instance.LogPath = "/var/log/nginx"
+		}
+	} else if instance.Type == models.NginxInstanceTypeDocker {
+		if instance.ContainerID == "" && instance.ContainerName == "" {
+			return fmt.Errorf("container_id or container_name is required for docker instance")
+		}
+		// Set default paths for Docker nginx
+		if instance.ConfigPath == "" {
+			instance.ConfigPath = "/etc/nginx"
+		}
+		if instance.SitesPath == "" {
+			instance.SitesPath = "/etc/nginx/conf.d"
+		}
+		if instance.LogPath == "" {
+			instance.LogPath = "/var/log/nginx"
+		}
+	}
+
+	// If this is the first instance or marked as default, ensure only one default
+	if instance.IsDefault {
+		s.db.Model(&models.NginxInstance{}).Where("is_default = ?", true).Update("is_default", false)
+	}
+
+	if err := s.db.Create(instance).Error; err != nil {
+		return err
+	}
+
+	s.log.Info("Nginx instance created", "id", instance.ID, "name", instance.Name, "type", instance.Type)
 	return nil
+}
+
+// UpdateInstance updates an existing instance
+func (s *NginxService) UpdateInstance(id string, updates map[string]interface{}) error {
+	var instance models.NginxInstance
+	if err := s.db.First(&instance, "id = ?", id).Error; err != nil {
+		return err
+	}
+
+	// Handle is_default update
+	if isDefault, ok := updates["is_default"].(bool); ok && isDefault {
+		s.db.Model(&models.NginxInstance{}).Where("id != ?", id).Update("is_default", false)
+	}
+
+	if err := s.db.Model(&instance).Updates(updates).Error; err != nil {
+		return err
+	}
+
+	s.log.Info("Nginx instance updated", "id", instance.ID)
+	return nil
+}
+
+// DeleteInstance deletes an instance
+func (s *NginxService) DeleteInstance(id string) error {
+	var instance models.NginxInstance
+	if err := s.db.First(&instance, "id = ?", id).Error; err != nil {
+		return err
+	}
+
+	// Check if there are sites using this instance
+	var siteCount int64
+	s.db.Model(&models.NginxSite{}).Where("instance_id = ?", id).Count(&siteCount)
+	if siteCount > 0 {
+		return fmt.Errorf("cannot delete instance with %d site(s)", siteCount)
+	}
+
+	// Don't delete the only instance
+	var totalCount int64
+	s.db.Model(&models.NginxInstance{}).Count(&totalCount)
+	if totalCount <= 1 {
+		return fmt.Errorf("cannot delete the only nginx instance")
+	}
+
+	if err := s.db.Delete(&instance).Error; err != nil {
+		return err
+	}
+
+	// If deleted instance was default, set another as default
+	if instance.IsDefault {
+		s.db.Model(&models.NginxInstance{}).Limit(1).Update("is_default", true)
+	}
+
+	s.log.Info("Nginx instance deleted", "id", instance.ID, "name", instance.Name)
+	return nil
+}
+
+// updateInstanceStatus updates the runtime status of an instance
+func (s *NginxService) updateInstanceStatus(instance *models.NginxInstance) {
+	if instance.Type == models.NginxInstanceTypeLocal {
+		// Check local nginx status
+		cmd := exec.Command("pgrep", "-x", "nginx")
+		if err := cmd.Run(); err == nil {
+			instance.Status = "running"
+			// Try to get version
+			versionCmd := exec.Command("nginx", "-v")
+			var stderr bytes.Buffer
+			versionCmd.Stderr = &stderr
+			versionCmd.Run()
+			if version := strings.TrimSpace(stderr.String()); version != "" {
+				instance.Version = strings.TrimPrefix(version, "nginx version: ")
+			}
+		} else {
+			instance.Status = "stopped"
+		}
+	} else if instance.Type == models.NginxInstanceTypeDocker && s.dockerClient != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+
+		containerID := instance.ContainerID
+		if containerID == "" {
+			containerID = instance.ContainerName
+		}
+
+		info, err := s.dockerClient.ContainerInspect(ctx, containerID)
+		if err != nil {
+			instance.Status = "error"
+			return
+		}
+
+		if info.State.Running {
+			instance.Status = "running"
+			instance.ContainerID = info.ID[:12]
+			// Calculate uptime
+			startTime, _ := time.Parse(time.RFC3339Nano, info.State.StartedAt)
+			instance.Uptime = time.Since(startTime).Round(time.Second).String()
+		} else {
+			instance.Status = "stopped"
+		}
+
+		// Get nginx version from container
+		if info.Config != nil && len(info.Config.Env) > 0 {
+			for _, env := range info.Config.Env {
+				if strings.HasPrefix(env, "NGINX_VERSION=") {
+					instance.Version = strings.TrimPrefix(env, "NGINX_VERSION=")
+					break
+				}
+			}
+		}
+	}
+}
+
+// StartInstance starts an nginx instance
+func (s *NginxService) StartInstance(id string) error {
+	instance, err := s.GetInstance(id)
+	if err != nil {
+		return err
+	}
+
+	if instance.Type == models.NginxInstanceTypeLocal {
+		cmd := exec.Command("nginx")
+		if err := cmd.Run(); err != nil {
+			return fmt.Errorf("failed to start nginx: %w", err)
+		}
+	} else if instance.Type == models.NginxInstanceTypeDocker && s.dockerClient != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+
+		containerID := instance.ContainerID
+		if containerID == "" {
+			containerID = instance.ContainerName
+		}
+
+		if err := s.dockerClient.ContainerStart(ctx, containerID, container.StartOptions{}); err != nil {
+			return fmt.Errorf("failed to start container: %w", err)
+		}
+	}
+
+	s.log.Info("Nginx instance started", "id", instance.ID)
+	return nil
+}
+
+// StopInstance stops an nginx instance
+func (s *NginxService) StopInstance(id string) error {
+	instance, err := s.GetInstance(id)
+	if err != nil {
+		return err
+	}
+
+	if instance.Type == models.NginxInstanceTypeLocal {
+		cmd := exec.Command("nginx", "-s", "stop")
+		if err := cmd.Run(); err != nil {
+			return fmt.Errorf("failed to stop nginx: %w", err)
+		}
+	} else if instance.Type == models.NginxInstanceTypeDocker && s.dockerClient != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+
+		containerID := instance.ContainerID
+		if containerID == "" {
+			containerID = instance.ContainerName
+		}
+
+		timeout := 10
+		if err := s.dockerClient.ContainerStop(ctx, containerID, container.StopOptions{Timeout: &timeout}); err != nil {
+			return fmt.Errorf("failed to stop container: %w", err)
+		}
+	}
+
+	s.log.Info("Nginx instance stopped", "id", instance.ID)
+	return nil
+}
+
+// ReloadInstance reloads an nginx instance configuration
+func (s *NginxService) ReloadInstance(id string) error {
+	instance, err := s.GetInstance(id)
+	if err != nil {
+		return err
+	}
+
+	if instance.Type == models.NginxInstanceTypeLocal {
+		cmd := exec.Command("nginx", "-s", "reload")
+		if err := cmd.Run(); err != nil {
+			return fmt.Errorf("failed to reload nginx: %w", err)
+		}
+	} else if instance.Type == models.NginxInstanceTypeDocker && s.dockerClient != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+
+		containerID := instance.ContainerID
+		if containerID == "" {
+			containerID = instance.ContainerName
+		}
+
+		// Execute nginx -s reload inside container
+		execConfig := container.ExecOptions{
+			Cmd:          []string{"nginx", "-s", "reload"},
+			AttachStdout: true,
+			AttachStderr: true,
+		}
+
+		execResp, err := s.dockerClient.ContainerExecCreate(ctx, containerID, execConfig)
+		if err != nil {
+			return fmt.Errorf("failed to create exec: %w", err)
+		}
+
+		if err := s.dockerClient.ContainerExecStart(ctx, execResp.ID, container.ExecStartOptions{}); err != nil {
+			return fmt.Errorf("failed to reload nginx in container: %w", err)
+		}
+	}
+
+	s.log.Info("Nginx instance reloaded", "id", instance.ID)
+	return nil
+}
+
+// TestInstanceConfig tests nginx configuration for an instance
+func (s *NginxService) TestInstanceConfig(id string) (bool, string, error) {
+	instance, err := s.GetInstance(id)
+	if err != nil {
+		return false, "", err
+	}
+
+	if instance.Type == models.NginxInstanceTypeLocal {
+		cmd := exec.Command("nginx", "-t")
+		var stderr bytes.Buffer
+		cmd.Stderr = &stderr
+		err := cmd.Run()
+		return err == nil, stderr.String(), nil
+	} else if instance.Type == models.NginxInstanceTypeDocker && s.dockerClient != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+
+		containerID := instance.ContainerID
+		if containerID == "" {
+			containerID = instance.ContainerName
+		}
+
+		execConfig := container.ExecOptions{
+			Cmd:          []string{"nginx", "-t"},
+			AttachStdout: true,
+			AttachStderr: true,
+		}
+
+		execResp, err := s.dockerClient.ContainerExecCreate(ctx, containerID, execConfig)
+		if err != nil {
+			return false, "", fmt.Errorf("failed to create exec: %w", err)
+		}
+
+		resp, err := s.dockerClient.ContainerExecAttach(ctx, execResp.ID, container.ExecAttachOptions{})
+		if err != nil {
+			return false, "", fmt.Errorf("failed to attach exec: %w", err)
+		}
+		defer resp.Close()
+
+		var output bytes.Buffer
+		_, _ = output.ReadFrom(resp.Reader)
+
+		// Check exec result
+		inspectResp, err := s.dockerClient.ContainerExecInspect(ctx, execResp.ID)
+		if err != nil {
+			return false, output.String(), err
+		}
+
+		return inspectResp.ExitCode == 0, output.String(), nil
+	}
+
+	return false, "unknown instance type", nil
+}
+
+// DiscoverDockerNginx discovers nginx containers running in Docker
+func (s *NginxService) DiscoverDockerNginx() ([]map[string]interface{}, error) {
+	if s.dockerClient == nil {
+		return nil, fmt.Errorf("docker client not available")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	// List all containers and filter for nginx
+	containers, err := s.dockerClient.ContainerList(ctx, container.ListOptions{
+		All: true,
+		Filters: filters.NewArgs(
+			filters.Arg("ancestor", "nginx"),
+		),
+	})
+	if err != nil {
+		// Try without filter as some nginx images might have different ancestry
+		containers, err = s.dockerClient.ContainerList(ctx, container.ListOptions{All: true})
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	var result []map[string]interface{}
+	
+	// Get existing docker instances
+	var existingInstances []models.NginxInstance
+	s.db.Where("type = ?", models.NginxInstanceTypeDocker).Find(&existingInstances)
+	existingIDs := make(map[string]bool)
+	for _, inst := range existingInstances {
+		existingIDs[inst.ContainerID] = true
+	}
+
+	for _, c := range containers {
+		// Check if image contains nginx
+		if !strings.Contains(strings.ToLower(c.Image), "nginx") {
+			continue
+		}
+
+		containerID := c.ID[:12]
+		name := ""
+		if len(c.Names) > 0 {
+			name = strings.TrimPrefix(c.Names[0], "/")
+		}
+
+		result = append(result, map[string]interface{}{
+			"container_id":   containerID,
+			"container_name": name,
+			"image":          c.Image,
+			"status":         c.Status,
+			"state":          c.State,
+			"created":        time.Unix(c.Created, 0).Format(time.RFC3339),
+			"already_added":  existingIDs[containerID],
+		})
+	}
+
+	return result, nil
+}
+
+// DeployDockerNginx deploys a new nginx Docker container
+func (s *NginxService) DeployDockerNginx(name, image string, ports map[int]int, volumes map[string]string) (*models.NginxInstance, error) {
+	if s.dockerClient == nil {
+		return nil, fmt.Errorf("docker client not available")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+	defer cancel()
+
+	if image == "" {
+		image = "nginx:latest"
+	}
+
+	// Pull image
+	_, err := s.dockerClient.ImagePull(ctx, image, dockerimage.PullOptions{})
+	if err != nil {
+		s.log.Warn("Failed to pull image, trying to use local", "error", err)
+	}
+
+	// Build container config
+	containerConfig := &container.Config{
+		Image: image,
+		Labels: map[string]string{
+			"vpanel.managed": "true",
+			"vpanel.service": "nginx",
+		},
+	}
+
+	// Build host config with port bindings and volumes
+	hostConfig := &container.HostConfig{
+		RestartPolicy: container.RestartPolicy{Name: "unless-stopped"},
+	}
+
+	// Add port bindings
+	if len(ports) > 0 {
+		portBindings := make(map[string][]struct {
+			HostIP   string
+			HostPort string
+		})
+		for hostPort, containerPort := range ports {
+			key := fmt.Sprintf("%d/tcp", containerPort)
+			portBindings[key] = append(portBindings[key], struct {
+				HostIP   string
+				HostPort string
+			}{
+				HostPort: fmt.Sprintf("%d", hostPort),
+			})
+		}
+	}
+
+	// Add volume mounts
+	if len(volumes) > 0 {
+		var binds []string
+		for hostPath, containerPath := range volumes {
+			binds = append(binds, fmt.Sprintf("%s:%s", hostPath, containerPath))
+		}
+		hostConfig.Binds = binds
+	}
+
+	// Create container
+	containerName := name
+	if containerName == "" {
+		containerName = fmt.Sprintf("vpanel-nginx-%d", time.Now().Unix())
+	}
+
+	resp, err := s.dockerClient.ContainerCreate(ctx, containerConfig, hostConfig, nil, nil, containerName)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create container: %w", err)
+	}
+
+	// Start container
+	if err := s.dockerClient.ContainerStart(ctx, resp.ID, container.StartOptions{}); err != nil {
+		return nil, fmt.Errorf("failed to start container: %w", err)
+	}
+
+	// Create instance record
+	instance := &models.NginxInstance{
+		Name:          name,
+		Type:          models.NginxInstanceTypeDocker,
+		Description:   fmt.Sprintf("Docker nginx container: %s", containerName),
+		ContainerID:   resp.ID[:12],
+		ContainerName: containerName,
+		Image:         image,
+		ConfigPath:    "/etc/nginx",
+		SitesPath:     "/etc/nginx/conf.d",
+		LogPath:       "/var/log/nginx",
+		Status:        "running",
+	}
+
+	if err := s.db.Create(instance).Error; err != nil {
+		return nil, err
+	}
+
+	s.log.Info("Docker nginx deployed", "id", instance.ID, "container_id", resp.ID[:12])
+	return instance, nil
+}
+
+// Reload reloads nginx configuration (for default instance)
+func (s *NginxService) Reload() error {
+	instance, err := s.GetDefaultInstance()
+	if err != nil {
+		// Fallback to direct reload if no instance found
+		cmd := exec.Command("nginx", "-s", "reload")
+		if err := cmd.Run(); err != nil {
+			s.log.Error("Failed to reload nginx", "error", err)
+			return fmt.Errorf("failed to reload nginx: %w", err)
+		}
+		s.log.Info("Nginx reloaded successfully")
+		return nil
+	}
+	return s.ReloadInstance(instance.ID)
 }
 
 // ListSites returns all nginx sites
 func (s *NginxService) ListSites(nodeID string) ([]models.NginxSite, error) {
 	var sites []models.NginxSite
-	query := s.db.Order("created_at DESC")
+	query := s.db.Preload("Instance").Order("created_at DESC")
 
 	if nodeID != "" {
 		query = query.Where("node_id = ?", nodeID)
 	}
+
+	if err := query.Find(&sites).Error; err != nil {
+		return nil, err
+	}
+	return sites, nil
+}
+
+// ListSitesByInstance returns all sites for a specific instance
+func (s *NginxService) ListSitesByInstance(instanceID string) ([]models.NginxSite, error) {
+	var sites []models.NginxSite
+	query := s.db.Order("created_at DESC").Where("instance_id = ?", instanceID)
 
 	if err := query.Find(&sites).Error; err != nil {
 		return nil, err
@@ -123,6 +741,14 @@ func (s *NginxService) CreateSite(site *models.NginxSite) error {
 		site.RootPath = fmt.Sprintf("/var/www/%s", site.Domain)
 	}
 
+	// If no instance specified, use default instance
+	if site.InstanceID == "" {
+		instance, err := s.GetDefaultInstance()
+		if err == nil {
+			site.InstanceID = instance.ID
+		}
+	}
+
 	// Create site in database
 	if err := s.db.Create(site).Error; err != nil {
 		return err
@@ -134,7 +760,7 @@ func (s *NginxService) CreateSite(site *models.NginxSite) error {
 		// Don't fail the creation, just log the error
 	}
 
-	s.log.Info("Nginx site created", "site_id", site.ID, "domain", site.Domain)
+	s.log.Info("Nginx site created", "site_id", site.ID, "domain", site.Domain, "instance_id", site.InstanceID)
 	return nil
 }
 
@@ -180,7 +806,7 @@ func (s *NginxService) DeleteSite(id string) error {
 	}
 
 	// Delete config file
-	configPath := s.getSiteConfigPath(&site)
+	configPath := s.getSiteConfigPath(&site, nil)
 	if err := os.Remove(configPath); err != nil && !os.IsNotExist(err) {
 		s.log.Warn("Failed to remove nginx config file", "error", err, "path", configPath)
 	}
@@ -384,6 +1010,11 @@ func (s *NginxService) GetErrorLogs(siteID string, lines int) ([]string, error) 
 
 // readLogFile reads the last N lines from a log file
 func (s *NginxService) readLogFile(path string, lines int) ([]string, error) {
+	// Check if file exists first
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		return []string{}, nil
+	}
+
 	// Use tail command to read last N lines
 	cmd := exec.Command("tail", "-n", fmt.Sprintf("%d", lines), path)
 	var stdout bytes.Buffer
@@ -392,10 +1023,6 @@ func (s *NginxService) readLogFile(path string, lines int) ([]string, error) {
 	cmd.Stderr = &stderr
 
 	if err := cmd.Run(); err != nil {
-		// If file doesn't exist, return empty array
-		if os.IsNotExist(err) {
-			return []string{}, nil
-		}
 		return nil, fmt.Errorf("failed to read log file: %s", stderr.String())
 	}
 
@@ -738,18 +1365,33 @@ func (s *NginxService) emptyAnalytics() map[string]interface{} {
 
 // writeSiteConfig writes nginx configuration for a site
 func (s *NginxService) writeSiteConfig(site *models.NginxSite) error {
-	configPath := s.getSiteConfigPath(site)
-	configDir := filepath.Dir(configPath)
-
-	// Create directory if it doesn't exist
-	if err := os.MkdirAll(configDir, 0755); err != nil {
-		return fmt.Errorf("failed to create config directory: %w", err)
+	// Get instance for this site
+	var instance *models.NginxInstance
+	if site.InstanceID != "" {
+		inst, err := s.GetInstance(site.InstanceID)
+		if err == nil {
+			instance = inst
+		}
 	}
 
 	// Generate config content
 	config, err := s.generateSiteConfig(site)
 	if err != nil {
 		return err
+	}
+
+	if instance != nil && instance.Type == models.NginxInstanceTypeDocker {
+		// Write config to Docker container
+		return s.writeSiteConfigToDocker(instance, site, config)
+	}
+
+	// Local nginx config writing
+	configPath := s.getSiteConfigPath(site, instance)
+	configDir := filepath.Dir(configPath)
+
+	// Create directory if it doesn't exist
+	if err := os.MkdirAll(configDir, 0755); err != nil {
+		return fmt.Errorf("failed to create config directory: %w", err)
 	}
 
 	// Write config file
@@ -759,11 +1401,11 @@ func (s *NginxService) writeSiteConfig(site *models.NginxSite) error {
 
 	// If site is disabled, remove from sites-enabled
 	if !site.Enabled {
-		enabledPath := s.getSiteEnabledPath(site)
+		enabledPath := s.getSiteEnabledPath(site, instance)
 		os.Remove(enabledPath)
 	} else {
 		// Create symlink in sites-enabled
-		enabledPath := s.getSiteEnabledPath(site)
+		enabledPath := s.getSiteEnabledPath(site, instance)
 		os.Remove(enabledPath) // Remove existing symlink if any
 		if err := os.Symlink(configPath, enabledPath); err != nil && !os.IsExist(err) {
 			s.log.Warn("Failed to create symlink", "error", err, "path", enabledPath)
@@ -773,15 +1415,135 @@ func (s *NginxService) writeSiteConfig(site *models.NginxSite) error {
 	return nil
 }
 
+// writeSiteConfigToDocker writes nginx config to a Docker container
+func (s *NginxService) writeSiteConfigToDocker(instance *models.NginxInstance, site *models.NginxSite, config string) error {
+	if s.dockerClient == nil {
+		return fmt.Errorf("docker client not available")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	containerID := instance.ContainerID
+	if containerID == "" {
+		containerID = instance.ContainerName
+	}
+
+	// For Docker nginx, we typically use conf.d directory
+	configPath := fmt.Sprintf("%s/%s.conf", instance.SitesPath, site.Domain)
+
+	// Use docker exec to write the config file
+	execConfig := container.ExecOptions{
+		Cmd:          []string{"sh", "-c", fmt.Sprintf("cat > %s << 'VPANEL_EOF'\n%s\nVPANEL_EOF", configPath, config)},
+		AttachStdout: true,
+		AttachStderr: true,
+	}
+
+	execResp, err := s.dockerClient.ContainerExecCreate(ctx, containerID, execConfig)
+	if err != nil {
+		return fmt.Errorf("failed to create exec: %w", err)
+	}
+
+	if err := s.dockerClient.ContainerExecStart(ctx, execResp.ID, container.ExecStartOptions{}); err != nil {
+		return fmt.Errorf("failed to write config to container: %w", err)
+	}
+
+	// If site is disabled, remove the config file
+	if !site.Enabled {
+		removeCmd := container.ExecOptions{
+			Cmd: []string{"rm", "-f", configPath},
+		}
+		removeResp, _ := s.dockerClient.ContainerExecCreate(ctx, containerID, removeCmd)
+		s.dockerClient.ContainerExecStart(ctx, removeResp.ID, container.ExecStartOptions{})
+	}
+
+	s.log.Info("Config written to Docker container", "container", containerID, "path", configPath)
+	return nil
+}
+
 // getSiteConfigPath returns the path to the site's nginx config file
-func (s *NginxService) getSiteConfigPath(site *models.NginxSite) string {
+func (s *NginxService) getSiteConfigPath(site *models.NginxSite, instance *models.NginxInstance) string {
+	if instance != nil && instance.SitesPath != "" {
+		return fmt.Sprintf("%s/%s.conf", instance.SitesPath, site.Domain)
+	}
 	// Use /etc/nginx/sites-available/ as default
 	return fmt.Sprintf("/etc/nginx/sites-available/%s.conf", site.Domain)
 }
 
 // getSiteEnabledPath returns the path to the site's enabled symlink
-func (s *NginxService) getSiteEnabledPath(site *models.NginxSite) string {
+func (s *NginxService) getSiteEnabledPath(site *models.NginxSite, instance *models.NginxInstance) string {
+	if instance != nil && instance.SitesEnabled != "" {
+		return fmt.Sprintf("%s/%s.conf", instance.SitesEnabled, site.Domain)
+	}
 	return fmt.Sprintf("/etc/nginx/sites-enabled/%s.conf", site.Domain)
+}
+
+// GetInstanceLogs returns logs for an nginx instance
+func (s *NginxService) GetInstanceLogs(instanceID string, logType string, lines int) ([]string, error) {
+	instance, err := s.GetInstance(instanceID)
+	if err != nil {
+		return nil, err
+	}
+
+	if lines <= 0 {
+		lines = 100
+	}
+
+	logFile := "access.log"
+	if logType == "error" {
+		logFile = "error.log"
+	}
+
+	if instance.Type == models.NginxInstanceTypeLocal {
+		logPath := filepath.Join(instance.LogPath, logFile)
+		return s.readLogFile(logPath, lines)
+	} else if instance.Type == models.NginxInstanceTypeDocker && s.dockerClient != nil {
+		return s.readDockerLogs(instance, logFile, lines)
+	}
+
+	return []string{}, nil
+}
+
+// readDockerLogs reads logs from a Docker container
+func (s *NginxService) readDockerLogs(instance *models.NginxInstance, logFile string, lines int) ([]string, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	containerID := instance.ContainerID
+	if containerID == "" {
+		containerID = instance.ContainerName
+	}
+
+	logPath := filepath.Join(instance.LogPath, logFile)
+
+	// Use docker exec to read log file
+	execConfig := container.ExecOptions{
+		Cmd:          []string{"tail", "-n", fmt.Sprintf("%d", lines), logPath},
+		AttachStdout: true,
+		AttachStderr: true,
+	}
+
+	execResp, err := s.dockerClient.ContainerExecCreate(ctx, containerID, execConfig)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create exec: %w", err)
+	}
+
+	resp, err := s.dockerClient.ContainerExecAttach(ctx, execResp.ID, container.ExecAttachOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("failed to attach exec: %w", err)
+	}
+	defer resp.Close()
+
+	var output bytes.Buffer
+	_, _ = output.ReadFrom(resp.Reader)
+
+	content := output.String()
+	if content == "" {
+		return []string{}, nil
+	}
+
+	logLines := strings.Split(strings.TrimRight(content, "\n"), "\n")
+	return logLines, nil
 }
 
 // generateSiteConfig generates nginx configuration for a site

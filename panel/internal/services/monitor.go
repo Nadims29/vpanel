@@ -128,13 +128,24 @@ type LoadMetrics struct {
 
 // GetMetrics returns current system metrics
 func (s *MonitorService) GetMetrics() (*Metrics, error) {
-	// CPU
-	cpuPercent, err := cpu.Percent(time.Second, false)
+	// CPU - use shorter interval (200ms) for faster response
+	// Get per-core and overall in one call to avoid double waiting
+	cpuPerCore, err := cpu.Percent(200*time.Millisecond, true)
 	if err != nil {
-		cpuPercent = []float64{0}
+		cpuPerCore = []float64{}
 	}
 
-	cpuPerCore, _ := cpu.Percent(time.Second, true)
+	// Calculate overall CPU from per-core values
+	var cpuPercent []float64
+	if len(cpuPerCore) > 0 {
+		var total float64
+		for _, v := range cpuPerCore {
+			total += v
+		}
+		cpuPercent = []float64{total / float64(len(cpuPerCore))}
+	} else {
+		cpuPercent = []float64{0}
+	}
 
 	// Memory
 	memInfo, err := mem.VirtualMemory()
@@ -351,6 +362,9 @@ func (s *MonitorService) GetNetworkInterfaces() ([]NetworkInterface, error) {
 
 	return result, nil
 }
+
+
+
 
 
 

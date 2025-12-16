@@ -117,6 +117,11 @@ func InternalError(c *gin.Context, message string) {
 	Error(c, http.StatusInternalServerError, "INTERNAL_ERROR", message)
 }
 
+// ServiceUnavailable sends a 503 service unavailable response
+func ServiceUnavailable(c *gin.Context, message string) {
+	Error(c, http.StatusServiceUnavailable, "SERVICE_UNAVAILABLE", message)
+}
+
 // ValidationError sends a 422 unprocessable entity response
 func ValidationError(c *gin.Context, errors interface{}) {
 	ErrorWithDetails(c, http.StatusUnprocessableEntity, "VALIDATION_ERROR", "Validation failed", errors)

@@ -26,95 +26,127 @@ function TerminalPane({ tabId, isActive }: { tabId: string; isActive: boolean })
   useEffect(() => {
     if (!terminalRef.current || xtermRef.current) return;
 
-    // Create xterm instance with Retina optimization
-    // Font size 12px is common for terminals, aligned to 4px grid
-    const xterm = new XTerm({
-      cursorBlink: true,
-      cursorStyle: 'block',
-      fontSize: 12,
-      fontFamily: 'Menlo, Monaco, "Courier New", monospace',
-      fontWeight: '400',
-      fontWeightBold: '600',
-      letterSpacing: 0,
-      lineHeight: 1.0,
-      theme: {
-        background: '#0a0a0a',
-        foreground: '#e5e5e5',
-        cursor: '#22c55e',
-        cursorAccent: '#0a0a0a',
-        selectionBackground: '#3b82f680',
-        black: '#171717',
-        red: '#ef4444',
-        green: '#22c55e',
-        yellow: '#eab308',
-        blue: '#3b82f6',
-        magenta: '#a855f7',
-        cyan: '#06b6d4',
-        white: '#e5e5e5',
-        brightBlack: '#525252',
-        brightRed: '#f87171',
-        brightGreen: '#4ade80',
-        brightYellow: '#facc15',
-        brightBlue: '#60a5fa',
-        brightMagenta: '#c084fc',
-        brightCyan: '#22d3ee',
-        brightWhite: '#ffffff',
-      },
-      allowTransparency: false, // Disable for better rendering performance
-      scrollback: 10000,
-      // Retina optimization options
-      allowProposedApi: true,
-      windowOptions: {
-        fullscreenWin: false,
-        maximizeWin: false,
-        minimizeWin: false,
-        raiseWin: false,
-        refreshWin: false,
-        restoreWin: false,
-        setWinLines: false,
-        setWinPosition: false,
-        setWinSizeChars: false,
-        setWinSizePixels: false,
-        getWinTitle: false,
-      },
-    });
-
-    // Add addons
-    const fitAddon = new FitAddon();
-    const webLinksAddon = new WebLinksAddon();
-    xterm.loadAddon(fitAddon);
-    xterm.loadAddon(webLinksAddon);
-
-    // Open terminal in container
-    xterm.open(terminalRef.current);
+    const container = terminalRef.current;
+    let cancelled = false;
     
-    // Try to load WebGL addon for better Retina rendering
-    try {
-      const webglAddon = new WebglAddon();
-      webglAddon.onContextLoss(() => {
-        webglAddon.dispose();
+    // Wait for container to have proper dimensions before initializing
+    const initTerminal = () => {
+      if (cancelled) return;
+      
+      const rect = container.getBoundingClientRect();
+      if (rect.width === 0 || rect.height === 0) {
+        // Container not ready, try again
+        requestAnimationFrame(initTerminal);
+        return;
+      }
+
+      // Create xterm instance with Retina optimization
+      // Font size 12px is common for terminals, aligned to 4px grid
+      const xterm = new XTerm({
+        cursorBlink: true,
+        cursorStyle: 'block',
+        fontSize: 12,
+        fontFamily: 'Menlo, Monaco, "Courier New", monospace',
+        fontWeight: '400',
+        fontWeightBold: '600',
+        letterSpacing: 0,
+        lineHeight: 1.0,
+        theme: {
+          background: '#0a0a0a',
+          foreground: '#e5e5e5',
+          cursor: '#22c55e',
+          cursorAccent: '#0a0a0a',
+          selectionBackground: '#3b82f680',
+          black: '#171717',
+          red: '#ef4444',
+          green: '#22c55e',
+          yellow: '#eab308',
+          blue: '#3b82f6',
+          magenta: '#a855f7',
+          cyan: '#06b6d4',
+          white: '#e5e5e5',
+          brightBlack: '#525252',
+          brightRed: '#f87171',
+          brightGreen: '#4ade80',
+          brightYellow: '#facc15',
+          brightBlue: '#60a5fa',
+          brightMagenta: '#c084fc',
+          brightCyan: '#22d3ee',
+          brightWhite: '#ffffff',
+        },
+        allowTransparency: false, // Disable for better rendering performance
+        scrollback: 10000,
+        // Retina optimization options
+        allowProposedApi: true,
+        windowOptions: {
+          fullscreenWin: false,
+          maximizeWin: false,
+          minimizeWin: false,
+          raiseWin: false,
+          refreshWin: false,
+          restoreWin: false,
+          setWinLines: false,
+          setWinPosition: false,
+          setWinSizeChars: false,
+          setWinSizePixels: false,
+          getWinTitle: false,
+        },
       });
-      xterm.loadAddon(webglAddon);
-      console.log('WebGL renderer enabled for better Retina display');
-    } catch (e) {
-      console.warn('WebGL not available, using canvas renderer');
-    }
-    
-    fitAddon.fit();
 
-    xtermRef.current = xterm;
-    fitAddonRef.current = fitAddon;
+      // Add addons
+      const fitAddon = new FitAddon();
+      const webLinksAddon = new WebLinksAddon();
+      xterm.loadAddon(fitAddon);
+      xterm.loadAddon(webLinksAddon);
 
-    // Connect WebSocket
-    connectWebSocket(xterm, fitAddon);
+      // Open terminal in container
+      if (cancelled) {
+        xterm.dispose();
+        return;
+      }
+      xterm.open(container);
+      
+      // Try to load WebGL addon for better Retina rendering
+      try {
+        const webglAddon = new WebglAddon();
+        webglAddon.onContextLoss(() => {
+          webglAddon.dispose();
+        });
+        xterm.loadAddon(webglAddon);
+        console.log('WebGL renderer enabled for better Retina display');
+      } catch (e) {
+        console.warn('WebGL not available, using canvas renderer');
+      }
+      
+      // Fit after a short delay to ensure dimensions are stable
+      requestAnimationFrame(() => {
+        try {
+          fitAddon.fit();
+        } catch (e) {
+          console.warn('Initial fit failed, will retry on resize');
+        }
+      });
+
+      xtermRef.current = xterm;
+      fitAddonRef.current = fitAddon;
+
+      // Connect WebSocket
+      connectWebSocket(xterm, fitAddon);
+    };
+
+    // Start initialization
+    requestAnimationFrame(initTerminal);
 
     return () => {
+      cancelled = true;
       if (wsRef.current) {
         wsRef.current.close();
         wsRef.current = null;
       }
-      xterm.dispose();
-      xtermRef.current = null;
+      if (xtermRef.current) {
+        xtermRef.current.dispose();
+        xtermRef.current = null;
+      }
       fitAddonRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps

@@ -15,6 +15,8 @@ import {
   Shield,
   Zap,
   Server,
+  AlertTriangle,
+  Box,
 } from 'lucide-react';
 import {
   Button,
@@ -39,7 +41,7 @@ import {
 import { cn } from '@/utils/cn';
 import toast from 'react-hot-toast';
 import * as nginxApi from '@/api/nginx';
-import type { NginxSite, SiteAnalytics } from '@/api/nginx';
+import type { NginxSite, NginxStatus, SiteAnalytics, NginxInstance } from '@/api/nginx';
 
 interface Site {
   id: string;
@@ -334,6 +336,46 @@ export default function NginxSites() {
   const [sites, setSites] = useState<Site[]>([]);
   const [loading, setLoading] = useState(true);
   const [reloading, setReloading] = useState(false);
+  const [nginxStatus, setNginxStatus] = useState<NginxStatus | null>(null);
+  const [statusLoading, setStatusLoading] = useState(true);
+  
+  // Instance management
+  const [instances, setInstances] = useState<NginxInstance[]>([]);
+  const [selectedInstanceId, setSelectedInstanceId] = useState<string>('all');
+  const [createInstanceId, setCreateInstanceId] = useState<string>('');
+
+  // Fetch nginx status
+  const fetchStatus = useCallback(async () => {
+    try {
+      setStatusLoading(true);
+      const status = await nginxApi.getNginxStatus();
+      setNginxStatus(status);
+    } catch (error) {
+      console.error('Failed to fetch nginx status:', error);
+    } finally {
+      setStatusLoading(false);
+    }
+  }, []);
+
+  // Fetch instances
+  const fetchInstances = useCallback(async () => {
+    try {
+      const data = await nginxApi.listInstances();
+      setInstances(data);
+      // Set default instance for creating sites
+      const defaultInstance = data.find(i => i.is_default) || data[0];
+      if (defaultInstance) {
+        setCreateInstanceId(defaultInstance.id);
+      }
+    } catch (error) {
+      console.error('Failed to fetch instances:', error);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchStatus();
+    fetchInstances();
+  }, [fetchStatus, fetchInstances]);
 
   const fetchSites = useCallback(async () => {
     try {
@@ -364,8 +406,10 @@ export default function NginxSites() {
   }, []);
 
   useEffect(() => {
-    fetchSites();
-  }, [fetchSites]);
+    if (nginxStatus?.installed) {
+      fetchSites();
+    }
+  }, [fetchSites, nginxStatus?.installed]);
 
   const handleReloadNginx = useCallback(async () => {
     try {
@@ -416,8 +460,69 @@ export default function NginxSites() {
   const filteredSites = sites.filter((s) => {
     const matchesSearch = s.domain.toLowerCase().includes(search.toLowerCase());
     const matchesStatus = statusFilter === 'all' || s.status === statusFilter;
+    // Instance filter - this would need instance_id added to the Site interface
+    // For now we show all sites
     return matchesSearch && matchesStatus;
   });
+  
+  // Get instance name helper
+  const getInstanceName = (instanceId?: string) => {
+    if (!instanceId) return '默认';
+    const instance = instances.find(i => i.id === instanceId);
+    return instance?.name || '未知';
+  };
+
+  // Show loading state while checking nginx status
+  if (statusLoading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Spinner />
+      </div>
+    );
+  }
+
+  // Show install prompt if nginx is not installed
+  if (nginxStatus && !nginxStatus.installed) {
+    const getInstallCommand = () => {
+      switch (nginxStatus.os) {
+        case 'darwin':
+          return 'brew install nginx';
+        case 'linux':
+          return 'sudo apt install nginx  # 或 sudo yum install nginx';
+        default:
+          return 'brew install nginx';
+      }
+    };
+
+    return (
+      <div>
+        <div className="mb-6">
+          <h1 className="text-2xl font-semibold text-dark-100">Sites</h1>
+          <p className="text-dark-400">Manage Nginx sites and virtual hosts</p>
+        </div>
+        <Card padding className="text-center py-12">
+          <div className="flex flex-col items-center gap-4">
+            <div className="w-16 h-16 rounded-full bg-yellow-500/10 flex items-center justify-center">
+              <AlertTriangle className="w-8 h-8 text-yellow-500" />
+            </div>
+            <div>
+              <h2 className="text-xl font-semibold text-dark-100 mb-2">Nginx 未安装</h2>
+              <p className="text-dark-400 max-w-md mx-auto mb-4">
+                要管理站点，您需要先安装 Nginx。请在终端中运行以下命令安装：
+              </p>
+              <div className="bg-dark-900 rounded-lg p-4 font-mono text-sm text-dark-200 mb-4">
+                <code>{getInstallCommand()}</code>
+              </div>
+              <Button variant="secondary" onClick={fetchStatus}>
+                <RefreshCw className="w-4 h-4 mr-2" />
+                重新检查
+              </Button>
+            </div>
+          </div>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div>
@@ -521,6 +626,23 @@ export default function NginxSites() {
       {/* Create Modal */}
       <Modal open={showCreate} onClose={() => setShowCreate(false)} title="Add New Site" size="lg">
         <div className="space-y-4">
+          {instances.length > 1 && (
+            <div>
+              <label className="block text-sm font-medium text-dark-300 mb-1.5">Nginx 实例</label>
+              <Select 
+                value={createInstanceId} 
+                onChange={(e) => setCreateInstanceId(e.target.value)}
+              >
+                {instances.map(inst => (
+                  <option key={inst.id} value={inst.id}>
+                    {inst.name} ({inst.type === 'docker' ? 'Docker' : '本地'})
+                    {inst.is_default ? ' - 默认' : ''}
+                  </option>
+                ))}
+              </Select>
+              <p className="text-xs text-dark-500 mt-1">选择要添加站点的Nginx实例</p>
+            </div>
+          )}
           <div>
             <label className="block text-sm font-medium text-dark-300 mb-1.5">Domain</label>
             <Input placeholder="example.com" />

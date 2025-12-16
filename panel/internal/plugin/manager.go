@@ -8,8 +8,10 @@ import (
 	"plugin"
 	"sync"
 
+	"github.com/docker/docker/client"
 	"github.com/gin-gonic/gin"
 	"github.com/vpanel/server/pkg/logger"
+	"gorm.io/gorm"
 )
 
 // Config holds plugin manager configuration
@@ -22,10 +24,14 @@ type Config struct {
 
 // Manager manages plugin lifecycle
 type Manager struct {
-	config  Config
-	plugins map[string]*LoadedPlugin
-	mu      sync.RWMutex
-	log     *logger.Logger
+	config     Config
+	plugins    map[string]*LoadedPlugin
+	mu         sync.RWMutex
+	log        *logger.Logger
+	db         *gorm.DB
+	docker     *client.Client
+	dispatcher *HookDispatcher
+	static     *StaticServer
 }
 
 // LoadedPlugin represents a loaded plugin
@@ -170,12 +176,39 @@ type Event struct {
 }
 
 // NewManager creates a new plugin manager
-func NewManager(cfg Config, log *logger.Logger) *Manager {
-	return &Manager{
+func NewManager(cfg Config, log *logger.Logger, db *gorm.DB, docker *client.Client) *Manager {
+	m := &Manager{
 		config:  cfg,
 		plugins: make(map[string]*LoadedPlugin),
 		log:     log,
+		db:      db,
+		docker:  docker,
 	}
+
+	// Initialize hook dispatcher
+	m.dispatcher = NewHookDispatcher(m, log)
+
+	// Initialize static file server
+	m.static = NewStaticServer(m, log)
+
+	// Auto-migrate plugin settings table
+	if db != nil {
+		if err := db.AutoMigrate(&PluginSettingModel{}); err != nil {
+			log.Warn("Failed to migrate plugin settings table", "error", err)
+		}
+	}
+
+	return m
+}
+
+// GetDispatcher returns the hook dispatcher.
+func (m *Manager) GetDispatcher() *HookDispatcher {
+	return m.dispatcher
+}
+
+// GetStaticServer returns the static file server.
+func (m *Manager) GetStaticServer() *StaticServer {
+	return m.static
 }
 
 // LoadAll loads all plugins from the plugin directory
@@ -520,31 +553,36 @@ func (m *Manager) BroadcastEvent(event Event) {
 
 // createPluginAPI creates the API object for a plugin
 func (m *Manager) createPluginAPI(pluginID string) *PluginAPI {
-	return &PluginAPI{
-		GetSetting: func(key string) (string, error) {
-			// Implementation would interact with the database
-			return "", nil
-		},
-		SetSetting: func(key, value string) error {
-			return nil
-		},
-		ReadFile: func(path string) ([]byte, error) {
-			return os.ReadFile(path)
-		},
-		WriteFile: func(path string, data []byte) error {
-			return os.WriteFile(path, data, 0644)
-		},
-		HTTPGet: func(url string) ([]byte, error) {
-			return nil, nil
-		},
-		HTTPPost: func(url string, body []byte) ([]byte, error) {
-			return nil, nil
-		},
-		SendNotification: func(title, message string) error {
-			return nil
-		},
-		Execute: func(command string, args ...string) (string, error) {
-			return "", nil
-		},
+	dataDir := filepath.Join(m.config.DataDir, pluginID)
+	return NewPluginAPIImpl(pluginID, dataDir, m.db, m.docker)
+}
+
+// ServePluginStatic registers plugin static file routes.
+func (m *Manager) ServePluginStatic(rg *gin.RouterGroup) {
+	m.static.RegisterRoutes(rg)
+}
+
+// DispatchHook dispatches an event to all enabled plugins.
+func (m *Manager) DispatchHook(hookType string, payload interface{}) {
+	if m.dispatcher != nil {
+		m.dispatcher.Dispatch(hookType, payload)
 	}
+}
+
+// GetPluginMenus returns all menus from enabled plugins.
+func (m *Manager) GetPluginMenus() []PluginMenuResponse {
+	return m.static.GetPluginMenus()
+}
+
+// GetPluginPages returns all pages from enabled plugins.
+func (m *Manager) GetPluginPages() []PluginPageResponse {
+	return m.static.GetPluginPages()
+}
+
+// Shutdown cleans up manager resources.
+func (m *Manager) Shutdown() {
+	if m.dispatcher != nil {
+		m.dispatcher.Close()
+	}
+	m.UnloadAll()
 }

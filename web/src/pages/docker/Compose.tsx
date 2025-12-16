@@ -29,8 +29,11 @@ import { cn } from '@/utils/cn';
 import toast from 'react-hot-toast';
 import * as dockerApi from '@/api/docker';
 import type { ComposeProject, CreateComposeProjectRequest } from '@/api/docker';
+import { useDockerStatus } from '@/hooks/useDockerStatus';
+import { DockerUnavailable } from '@/components/docker/DockerUnavailable';
 
 export default function DockerCompose() {
+  const dockerStatus = useDockerStatus();
   const [projects, setProjects] = useState<ComposeProject[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -173,7 +176,18 @@ export default function DockerCompose() {
     );
   });
 
-  if (loading) {
+  // Show Docker unavailable screen if Docker is not connected
+  if (!dockerStatus.loading && !dockerStatus.available) {
+    return (
+      <DockerUnavailable
+        error={dockerStatus.error}
+        loading={dockerStatus.loading}
+        onRetry={dockerStatus.refetch}
+      />
+    );
+  }
+
+  if (loading || dockerStatus.loading) {
     return (
       <div className="flex items-center justify-center h-64">
         <Spinner size="lg" />

@@ -1,8 +1,74 @@
 import { get, post, put, del } from './client';
 
+// ===============================
+// Nginx Instance Types
+// ===============================
+
+export type NginxInstanceType = 'local' | 'docker';
+
+export interface NginxInstance {
+  id: string;
+  node_id?: string;
+  name: string;
+  type: NginxInstanceType;
+  description?: string;
+  container_id?: string;
+  container_name?: string;
+  image?: string;
+  config_path: string;
+  sites_path: string;
+  sites_enabled?: string;
+  log_path: string;
+  status: 'running' | 'stopped' | 'error' | 'unknown';
+  version?: string;
+  is_default: boolean;
+  pid?: number;
+  uptime?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CreateInstanceRequest {
+  name: string;
+  type: NginxInstanceType;
+  description?: string;
+  container_id?: string;
+  container_name?: string;
+  image?: string;
+  config_path?: string;
+  sites_path?: string;
+  sites_enabled?: string;
+  log_path?: string;
+  is_default?: boolean;
+}
+
+export interface UpdateInstanceRequest extends Partial<CreateInstanceRequest> {}
+
+export interface DockerNginxContainer {
+  container_id: string;
+  container_name: string;
+  image: string;
+  status: string;
+  state: string;
+  created: string;
+  already_added: boolean;
+}
+
+export interface DeployDockerNginxRequest {
+  name: string;
+  image?: string;
+  ports?: Record<number, number>;
+  volumes?: Record<string, string>;
+}
+
+// ===============================
+// Site Types
+// ===============================
+
 export interface NginxSite {
   id: string;
   node_id?: string;
+  instance_id?: string;
   name: string;
   domain: string;
   aliases: string[];
@@ -18,6 +84,7 @@ export interface NginxSite {
   enabled: boolean;
   created_at: string;
   updated_at: string;
+  instance?: NginxInstance;
 }
 
 export interface SSLCertificate {
@@ -36,6 +103,7 @@ export interface SSLCertificate {
 export interface CreateSiteRequest {
   name?: string;
   domain: string;
+  instance_id?: string;
   aliases?: string[];
   port?: number;
   ssl_enabled?: boolean;
@@ -62,16 +130,100 @@ export interface SiteAnalytics {
 }
 
 export interface NginxStatus {
+  installed: boolean;
+  local_installed?: boolean;
   running: boolean;
   config_valid: boolean;
   error?: string;
   total_sites: number;
   enabled_sites: number;
+  total_instances?: number;
+  docker_instances?: number;
+  docker_available?: boolean;
+  os: 'darwin' | 'linux' | 'windows' | string;
 }
+
+export interface ConfigTestResult {
+  valid: boolean;
+  output: string;
+}
+
+// ===============================
+// Instance API
+// ===============================
+
+// List all nginx instances
+export async function listInstances(nodeId?: string): Promise<NginxInstance[]> {
+  return get<NginxInstance[]>('/nginx/instances', nodeId ? { node_id: nodeId } : undefined);
+}
+
+// Get a single instance
+export async function getInstance(id: string): Promise<NginxInstance> {
+  return get<NginxInstance>(`/nginx/instances/${id}`);
+}
+
+// Create a new instance
+export async function createInstance(data: CreateInstanceRequest): Promise<NginxInstance> {
+  return post<NginxInstance>('/nginx/instances', data);
+}
+
+// Update an instance
+export async function updateInstance(id: string, data: UpdateInstanceRequest): Promise<NginxInstance> {
+  return put<NginxInstance>(`/nginx/instances/${id}`, data);
+}
+
+// Delete an instance
+export async function deleteInstance(id: string): Promise<void> {
+  return del<void>(`/nginx/instances/${id}`);
+}
+
+// Start an instance
+export async function startInstance(id: string): Promise<void> {
+  return post<void>(`/nginx/instances/${id}/start`);
+}
+
+// Stop an instance
+export async function stopInstance(id: string): Promise<void> {
+  return post<void>(`/nginx/instances/${id}/stop`);
+}
+
+// Reload an instance
+export async function reloadInstance(id: string): Promise<void> {
+  return post<void>(`/nginx/instances/${id}/reload`);
+}
+
+// Test instance configuration
+export async function testInstanceConfig(id: string): Promise<ConfigTestResult> {
+  return get<ConfigTestResult>(`/nginx/instances/${id}/test`);
+}
+
+// Get instance logs
+export async function getInstanceLogs(id: string, type: 'access' | 'error' = 'access', lines = 100): Promise<{ logs: string[] }> {
+  return get<{ logs: string[] }>(`/nginx/instances/${id}/logs`, { type, lines });
+}
+
+// Discover Docker nginx containers
+export async function discoverDockerNginx(): Promise<DockerNginxContainer[]> {
+  return get<DockerNginxContainer[]>('/nginx/instances/discover');
+}
+
+// Deploy a new Docker nginx
+export async function deployDockerNginx(data: DeployDockerNginxRequest): Promise<NginxInstance> {
+  return post<NginxInstance>('/nginx/instances/deploy', data);
+}
+
+// ===============================
+// Site API
+// ===============================
 
 // List all nginx sites
 export async function listSites(nodeId?: string): Promise<NginxSite[]> {
   return get<NginxSite[]>('/nginx/sites', nodeId ? { node_id: nodeId } : undefined);
+}
+
+// List sites by instance
+export async function listSitesByInstance(instanceId: string): Promise<NginxSite[]> {
+  return get<NginxSite[]>('/nginx/sites', { instance_id: instanceId });
 }
 
 // Get a single site

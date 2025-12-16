@@ -4,7 +4,7 @@ export { Card, CardHeader, CardContent, CardFooter } from './Card';
 export { Input, Textarea, Select, Checkbox, Switch } from './Form';
 export { Modal, ConfirmModal } from './Modal';
 export { Table, TableHeader, TableBody, TableRow, TableCell } from './Table';
-export { Tabs, TabList, Tab, TabPanel } from './Tabs';
+export { Tabs, TabList, Tab, TabPanels, TabPanel } from './Tabs';
 export { Badge } from './Badge';
 export { Dropdown, DropdownItem, DropdownDivider } from './Dropdown';
 export { Tooltip } from './Tooltip';
