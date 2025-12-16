@@ -20,7 +20,6 @@ import {
   ChevronDown,
   ChevronLeft,
   ChevronRight,
-  type LucideIcon,
 } from 'lucide-react';
 import { useState, useEffect, useMemo } from 'react';
 import * as pluginsApi from '@/api/plugins';
@@ -32,22 +31,6 @@ interface MenuItem {
   children?: { title: string; path: string }[];
   isPlugin?: boolean;
 }
-
-// Icon mapping for plugin icons
-const iconMap: Record<string, LucideIcon> = {
-  puzzle: Puzzle,
-  container: Container,
-  rocket: Rocket,
-  globe: Globe,
-  database: Database,
-  folder: FolderOpen,
-  terminal: Terminal,
-  clock: Clock,
-  shield: Shield,
-  package: Package,
-  settings: Settings,
-  file: FileText,
-};
 
 const staticMenuItems: MenuItem[] = [
   { title: 'Dashboard', icon: LayoutDashboard, path: '/' },
@@ -174,7 +157,7 @@ export default function Sidebar() {
         return newItems;
       });
     }
-  }, [location.pathname]);
+  }, [location.pathname, menuItems]);
 
   const toggleExpand = (title: string) => {
     setExpandedItems((prev) =>

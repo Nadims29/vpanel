@@ -222,7 +222,7 @@ func (h *AuthHandler) Logout(c *gin.Context) {
 	if len(token) > 7 {
 		token = token[7:] // Remove "Bearer "
 	}
-	h.svc.Auth.Logout(token)
+	_ = h.svc.Auth.Logout(token)
 	response.Success(c, nil)
 }
 
@@ -425,7 +425,7 @@ func (h *DockerHandler) CreateContainer(c *gin.Context) {
 	}
 
 	// Start the container
-	h.svc.Docker.StartContainer(ctx, id)
+	_ = h.svc.Docker.StartContainer(ctx, id)
 
 	response.Created(c, gin.H{"id": id})
 }
@@ -2224,13 +2224,7 @@ func (h *PluginHandler) List(c *gin.Context) {
 
 	result := make([]gin.H, 0, len(plugins))
 	for _, lp := range plugins {
-		status := "stopped"
-		if lp.Instance != nil {
-			info := lp.Instance.GetInfo()
-			if info != nil {
-				status = info.Status
-			}
-		}
+		var status string
 		if lp.Enabled {
 			status = "enabled"
 		} else {

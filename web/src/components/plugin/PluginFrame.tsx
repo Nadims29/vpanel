@@ -119,6 +119,7 @@ export function PluginFrame({ pluginId, path = '', title, className }: PluginFra
 /**
  * usePluginCommunication hook for parent-child communication with plugin iframe.
  */
+// eslint-disable-next-line react-refresh/only-export-components
 export function usePluginCommunication(pluginId: string) {
   const sendMessage = (type: string, payload?: unknown) => {
     const iframe = document.querySelector(

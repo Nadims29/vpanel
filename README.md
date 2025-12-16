@@ -24,12 +24,6 @@
 
 > **"Deploy is easy, maintenance is the key."**
 
-There's no shortage of deployment tools. Coolify, Dokploy, and others can get your app running. But the real challenge lies beyond deployment:
-
-- What happens when your service crashes at 3 AM?
-- Who alerts you before the disk fills up?
-- How do you quickly diagnose issues when something goes wrong?
-
 **VPanel is not just another deployment tool — it's your operations guardian for everything that comes after.**
 
 We handle monitoring, alerting, backups, diagnostics, and recovery — keeping your servers healthy and running.
@@ -202,30 +196,6 @@ func main() {
 
 ---
 
-## 🛣️ Roadmap
-
-### Phase 1: Core (Current)
-- [x] Docker full lifecycle management
-- [x] Nginx visual configuration
-- [x] Database management
-- [x] File manager & Web terminal
-- [x] RBAC & Audit logs
-- [ ] App Store MVP
-- [ ] Plugin SDK documentation
-
-### Phase 2: Differentiation (3-6 months)
-- [ ] AI Operations Assistant
-- [ ] Plugin Marketplace
-- [ ] GitOps integration
-- [ ] Multi-node management
-
-### Phase 3: Enterprise (6-12 months)
-- [ ] Multi-cloud management
-- [ ] Kubernetes support
-- [ ] LDAP/SSO integration
-- [ ] Compliance certifications
-
----
 
 ## 📄 License
 

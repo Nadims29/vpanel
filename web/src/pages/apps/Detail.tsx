@@ -222,12 +222,13 @@ export default function AppDetail() {
 
     try {
       switch (action) {
-        case 'deploy':
+        case 'deploy': {
           const deployment = await appsApi.deployApp(app.id);
           setActiveDeployment(deployment);
           toast.success('Deployment started');
           loadDeployments();
           break;
+        }
         case 'start':
           await appsApi.startApp(app.id);
           toast.success('App started');

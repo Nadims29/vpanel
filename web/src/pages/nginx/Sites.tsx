@@ -16,7 +16,6 @@ import {
   Zap,
   Server,
   AlertTriangle,
-  Box,
 } from 'lucide-react';
 import {
   Button,
@@ -341,7 +340,6 @@ export default function NginxSites() {
   
   // Instance management
   const [instances, setInstances] = useState<NginxInstance[]>([]);
-  const [selectedInstanceId, setSelectedInstanceId] = useState<string>('all');
   const [createInstanceId, setCreateInstanceId] = useState<string>('');
 
   // Fetch nginx status
@@ -465,13 +463,6 @@ export default function NginxSites() {
     return matchesSearch && matchesStatus;
   });
   
-  // Get instance name helper
-  const getInstanceName = (instanceId?: string) => {
-    if (!instanceId) return '默认';
-    const instance = instances.find(i => i.id === instanceId);
-    return instance?.name || '未知';
-  };
-
   // Show loading state while checking nginx status
   if (statusLoading) {
     return (

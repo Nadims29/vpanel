@@ -1,0 +1,82 @@
+version: "2"
+
+run:
+  timeout: 5m
+
+linters:
+  default: standard
+  enable:
+    - errcheck
+    - govet
+    - ineffassign
+    - staticcheck
+    - unused
+
+  settings:
+    errcheck:
+      disable-default-exclusions: false
+      check-type-assertions: false
+      check-blank: false
+      exclude-functions:
+        # Close operations
+        - (io.Closer).Close
+        - (*os.File).Close
+        - (*net.Conn).Close
+        - (*net.TCPListener).Close
+        - (net.Conn).Close
+        - (*database/sql.DB).Close
+        - (*database/sql.Rows).Close
+        - (io.ReadCloser).Close
+        - (*compress/gzip.Reader).Close
+        - (*compress/gzip.Writer).Close
+        - (*archive/zip.Reader).Close
+        - (*archive/zip.Writer).Close
+        - (*archive/tar.Writer).Close
+        - (*github.com/gorilla/websocket.Conn).Close
+        # IO operations
+        - io.Copy
+        - (*go.uber.org/zap.SugaredLogger).Sync
+        # Viper
+        - (*github.com/spf13/viper.Viper).BindEnv
+        # OS operations
+        - os.Remove
+        - os.RemoveAll
+        - os.MkdirAll
+        # Docker operations
+        - (*github.com/docker/docker/client.Client).ContainerRemove
+        - (*github.com/docker/docker/client.Client).ContainerExecStart
+        # PTY operations
+        - github.com/creack/pty.Setsize
+        # Exec operations
+        - (*os/exec.Cmd).Run
+        - (*os/exec.Cmd).Wait
+        - (*os.Process).Kill
+
+    staticcheck:
+      checks:
+        - all
+        - -QF1003
+        - -QF1008
+        - -ST1000
+        - -ST1022
+
+issues:
+  exclude-rules:
+    # Ignore defer Close/Sync errors
+    - linters:
+        - errcheck
+      source: "^\\s*defer\\s+"
+    # Ignore best-effort cleanup operations in services
+    - linters:
+        - errcheck
+      path: "internal/services/"
+      source: "(StopContainer|RemoveContainer|RemoveImage|DeleteSite|executeJob|execComposeCommand)"
+    # Ignore audit logging errors
+    - linters:
+        - errcheck
+      source: "auditService\\.Log"
+    # Ignore auth cleanup
+    - linters:
+        - errcheck
+      source: "(Logout|StartContainer)"
+

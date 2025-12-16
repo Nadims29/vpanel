@@ -177,20 +177,20 @@ func (s *AppsService) DeleteApp(id string) error {
 
 	ctx := context.Background()
 
-	// Stop and remove container
+	// Stop and remove container (best-effort cleanup)
 	if app.ContainerID != "" {
-		s.docker.StopContainer(ctx, app.ContainerID)
-		s.docker.RemoveContainer(ctx, app.ContainerID, true)
+		_ = s.docker.StopContainer(ctx, app.ContainerID)
+		_ = s.docker.RemoveContainer(ctx, app.ContainerID, true)
 	}
 
-	// Remove image
+	// Remove image (best-effort cleanup)
 	if app.ImageTag != "" {
-		s.docker.RemoveImage(ctx, app.ImageTag, true)
+		_ = s.docker.RemoveImage(ctx, app.ImageTag, true)
 	}
 
-	// Remove nginx site if exists
+	// Remove nginx site if exists (best-effort cleanup)
 	if app.NginxSiteID != "" {
-		s.nginx.DeleteSite(app.NginxSiteID)
+		_ = s.nginx.DeleteSite(app.NginxSiteID)
 	}
 
 	// Delete deployment records
@@ -305,8 +305,8 @@ func (s *AppsService) runDeployment(deployID string, app *models.App) {
 	// Step 3: Stop old container (70-75%)
 	if app.ContainerID != "" {
 		logAndUpdate("deploying", 72, "🛑 Stopping old container...")
-		s.docker.StopContainer(ctx, app.ContainerID)
-		s.docker.RemoveContainer(ctx, app.ContainerID, true)
+		_ = s.docker.StopContainer(ctx, app.ContainerID)
+		_ = s.docker.RemoveContainer(ctx, app.ContainerID, true)
 		logAndUpdate("deploying", 75, "✓ Old container removed")
 	}
 
@@ -635,7 +635,7 @@ func (s *AppsService) getFreePort() (int, error) {
 	for port := 32000; port < 33000; port++ {
 		ln, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
 		if err == nil {
-			ln.Close()
+			_ = ln.Close()
 			return port, nil
 		}
 	}

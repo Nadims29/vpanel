@@ -135,10 +135,7 @@ func (s *DockerService) ListContainers(ctx context.Context, all bool) ([]Contain
 		}
 
 		// Format name (remove leading /)
-		name := c.Names[0]
-		if strings.HasPrefix(name, "/") {
-			name = name[1:]
-		}
+		name := strings.TrimPrefix(c.Names[0], "/")
 
 		// Map state
 		status := mapContainerState(c.State)
@@ -380,7 +377,7 @@ func (s *DockerService) GetContainerStats(ctx context.Context, id string) (map[s
 	}
 	defer resp.Body.Close()
 
-	var stats types.StatsJSON
+	var stats container.StatsResponse
 	if err := json.NewDecoder(resp.Body).Decode(&stats); err != nil {
 		return nil, err
 	}
@@ -663,12 +660,12 @@ func (s *DockerService) RemoveComposeProject(ctx context.Context, id string) err
 		return err
 	}
 
-	// Stop and remove containers first
-	s.execComposeCommand(ctx, project.Path, "down", "-v")
+	// Stop and remove containers first (best-effort)
+	_ = s.execComposeCommand(ctx, project.Path, "down", "-v")
 
-	// Remove compose file
+	// Remove compose file (best-effort)
 	composeFile := filepath.Join(project.Path, "docker-compose.yml")
-	os.Remove(composeFile)
+	_ = os.Remove(composeFile)
 
 	return s.db.Delete(&project).Error
 }

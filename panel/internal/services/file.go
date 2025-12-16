@@ -553,7 +553,7 @@ func (s *FileService) decompressZip(archivePath, destPath string) error {
 	if err != nil {
 		return err
 	}
-	defer reader.Close()
+	defer func() { _ = reader.Close() }()
 
 	for _, file := range reader.File {
 		filePath := filepath.Join(destPath, file.Name)
@@ -656,6 +656,7 @@ var (
 	ErrFileTooLarge      = errors.New("file is too large")
 	ErrUnsupportedFormat = errors.New("unsupported archive format")
 )
+
 
 
 

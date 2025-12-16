@@ -48,7 +48,7 @@ func main() {
 		Format:     "json",
 		OutputPath: "logs/vpanel.log",
 	})
-	defer log.Sync()
+	defer func() { _ = log.Sync() }()
 
 	log.Info("Starting VPanel Server",
 		"version", Version,

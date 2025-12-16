@@ -348,8 +348,8 @@ func Audit(auditService *services.AuditService) gin.HandlerFunc {
 			"status_code": c.Writer.Status(),
 		}
 
-		// Log the audit entry
-		auditService.Log(
+		// Log the audit entry (ignore error as this is best-effort logging)
+		_ = auditService.Log(
 			userIDStr,
 			usernameStr,
 			action,

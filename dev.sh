@@ -120,12 +120,27 @@ dev_docs() {
     cd docs && npm run dev
 }
 
-# 运行测试
-test() {
-    log_info "Running tests..."
+# 运行后端测试
+test_server() {
+    log_info "Running server tests..."
     cd panel && go test -v ./...
     cd ..
-    log_success "Tests completed"
+    log_success "Server tests completed"
+}
+
+# 运行前端测试
+test_web() {
+    log_info "Running web tests..."
+    cd web && npm run test
+    cd ..
+    log_success "Web tests completed"
+}
+
+# 运行所有测试
+test() {
+    test_server
+    test_web
+    log_success "All tests completed"
 }
 
 # 测试覆盖率
@@ -134,7 +149,9 @@ test_coverage() {
     cd panel && go test -coverprofile=coverage.out ./...
     cd panel && go tool cover -html=coverage.out -o coverage.html
     cd ..
-    log_success "Coverage report: panel/coverage.html"
+    cd web && npm run test:cov
+    cd ..
+    log_success "Coverage reports generated"
 }
 
 # 代码检查
@@ -228,7 +245,9 @@ show_help() {
     echo "  build:all     构建所有平台版本"
     echo ""
     echo "测试命令:"
-    echo "  test          运行测试"
+    echo "  test          运行所有测试"
+    echo "  test:server   仅运行后端测试"
+    echo "  test:web      仅运行前端测试"
     echo "  test:cov      运行测试并生成覆盖率报告"
     echo "  lint          运行代码检查"
     echo ""
@@ -279,6 +298,12 @@ case "${1:-help}" in
         ;;
     test)
         test
+        ;;
+    test:server)
+        test_server
+        ;;
+    test:web)
+        test_web
         ;;
     test:cov)
         test_coverage

@@ -61,7 +61,7 @@ type CreateLocalServerRequest struct {
 // Returns the deploy task ID for progress tracking
 func (s *DatabaseService) DeployDatabaseServer(req *CreateLocalServerRequest) (*models.DeployTask, error) {
 	if s.docker == nil || s.docker.client == nil {
-		return nil, fmt.Errorf("Docker is not available")
+		return nil, fmt.Errorf("docker is not available")
 	}
 
 	// Create deploy task
@@ -230,7 +230,7 @@ func (s *DatabaseService) runDeployment(taskID string, req *CreateLocalServerReq
 	s.updateTaskProgress(taskID, 3, "Starting container...", "running", 0, 65)
 
 	if err := s.docker.StartContainer(ctx, containerID); err != nil {
-		s.docker.RemoveContainer(ctx, containerID, true)
+		_ = s.docker.RemoveContainer(ctx, containerID, true)
 		failTask(fmt.Errorf("failed to start container: %w", err))
 		return
 	}
@@ -271,8 +271,8 @@ func (s *DatabaseService) runDeployment(taskID string, req *CreateLocalServerReq
 	}
 
 	if err := s.db.Create(server).Error; err != nil {
-		s.docker.StopContainer(ctx, containerID)
-		s.docker.RemoveContainer(ctx, containerID, true)
+		_ = s.docker.StopContainer(ctx, containerID)
+		_ = s.docker.RemoveContainer(ctx, containerID, true)
 		failTask(fmt.Errorf("failed to save server: %w", err))
 		return
 	}
@@ -310,7 +310,7 @@ func (s *DatabaseService) CreateLocalServer(req *CreateLocalServerRequest) (*mod
 			return s.GetServer(task.ServerID)
 		}
 		if task.Status == "failed" {
-			return nil, fmt.Errorf(task.Error)
+			return nil, fmt.Errorf("%s", task.Error)
 		}
 	}
 

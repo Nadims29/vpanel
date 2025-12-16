@@ -26,7 +26,6 @@ import {
   Empty,
   Spinner,
 } from '@/components/ui';
-import { cn } from '@/utils/cn';
 import toast from 'react-hot-toast';
 import * as appsApi from '@/api/apps';
 import type { App } from '@/api/apps';

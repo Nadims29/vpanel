@@ -11,9 +11,6 @@ import {
   Trash2,
   Settings,
   CheckCircle,
-  XCircle,
-  AlertTriangle,
-  Terminal,
   FileText,
   Search,
 } from 'lucide-react';
@@ -30,7 +27,6 @@ import {
   Tabs,
   TabList,
   Tab,
-  TabPanel,
   Empty,
   Input,
   Select,
@@ -336,9 +332,9 @@ export default function NginxInstances() {
         is_default: false,
       });
       fetchInstances();
-    } catch (error: any) {
+    } catch (error) {
       console.error('Failed to create instance:', error);
-      toast.error(error.message || '创建实例失败');
+      toast.error(error instanceof Error ? error.message : '创建实例失败');
     }
   };
 
@@ -361,9 +357,9 @@ export default function NginxInstances() {
         https_port: 443,
       });
       fetchInstances();
-    } catch (error: any) {
+    } catch (error) {
       console.error('Failed to deploy Docker nginx:', error);
-      toast.error(error.message || '部署失败');
+      toast.error(error instanceof Error ? error.message : '部署失败');
     }
   };
 
@@ -401,8 +397,8 @@ export default function NginxInstances() {
       await nginxApi.deleteInstance(id);
       toast.success('实例已删除');
       fetchInstances();
-    } catch (error: any) {
-      toast.error(error.message || '删除失败');
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : '删除失败');
     }
   };
 
@@ -748,3 +744,4 @@ export default function NginxInstances() {
     </div>
   );
 }
+

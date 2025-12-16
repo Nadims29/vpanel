@@ -216,7 +216,7 @@ func (s *CronService) scheduleJob(job *models.CronJob) error {
 
 	// Add new schedule
 	entryID, err := s.cron.AddFunc(job.Schedule, func() {
-		s.executeJob(job)
+		_, _ = s.executeJob(job)
 	})
 	if err != nil {
 		return err

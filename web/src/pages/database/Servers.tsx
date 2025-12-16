@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import {
   Plus,
   Database,
@@ -725,6 +725,7 @@ export default function DatabaseServers() {
     }, 500); // Poll every 500ms
 
     return () => clearInterval(interval);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [deployTask?.id, deployTask?.status]);
 
   const fetchServers = async () => {
