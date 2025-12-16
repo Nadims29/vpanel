@@ -3,12 +3,12 @@ package database
 import (
 	"fmt"
 
+	"github.com/glebarez/sqlite"
 	"github.com/vpanel/server/internal/config"
 	"github.com/vpanel/server/internal/models"
 	"golang.org/x/crypto/bcrypt"
 
 	"gorm.io/driver/postgres"
-	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 )
