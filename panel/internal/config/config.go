@@ -184,7 +184,7 @@ func setDefaults(v *viper.Viper) {
 	// Server defaults
 	v.SetDefault("server.port", 8080)
 	v.SetDefault("server.mode", "debug")
-	v.SetDefault("server.web_dir", "./web/dist")
+	v.SetDefault("server.web_dir", "/var/lib/vpanel/web")
 	v.SetDefault("server.cors.enabled", true)
 	v.SetDefault("server.cors.allowed_origins", []string{"*"})
 	v.SetDefault("server.cors.allowed_methods", []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"})

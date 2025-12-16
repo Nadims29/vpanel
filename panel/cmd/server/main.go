@@ -482,9 +482,9 @@ func setupStatic(r *gin.Engine, webDir string) {
 	// Try to find web directory
 	paths := []string{
 		webDir,
+		"/var/lib/vpanel/web",
 		"./web/dist",
 		"../web/dist",
-		"/opt/vpanel/web",
 	}
 
 	for _, p := range paths {
