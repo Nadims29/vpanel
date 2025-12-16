@@ -129,13 +129,22 @@ type LoggingConfig struct {
 
 // Load loads the configuration from file and environment
 func Load() (*Config, error) {
+	return LoadWithPath("")
+}
+
+// LoadWithPath loads the configuration from the specified file path.
+// If path is empty, it falls back to VPANEL_CONFIG env var or default config.yaml
+func LoadWithPath(path string) (*Config, error) {
 	v := viper.New()
 
 	// Set default values
 	setDefaults(v)
 
-	// Config file
-	configPath := os.Getenv("VPANEL_CONFIG")
+	// Config file priority: argument > env var > default
+	configPath := path
+	if configPath == "" {
+		configPath = os.Getenv("VPANEL_CONFIG")
+	}
 	if configPath == "" {
 		configPath = "config.yaml"
 	}

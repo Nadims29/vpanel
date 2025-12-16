@@ -28,9 +28,12 @@ var (
 )
 
 func main() {
-	// Handle command line arguments
-	if len(os.Args) > 1 {
-		switch os.Args[1] {
+	// Parse command line arguments
+	var configPath string
+	args := os.Args[1:]
+	
+	for i := 0; i < len(args); i++ {
+		switch args[i] {
 		case "version", "--version", "-v":
 			fmt.Printf("VPanel Server v%s\n", Version)
 			fmt.Printf("Build Time: %s\n", BuildTime)
@@ -39,6 +42,21 @@ func main() {
 		case "--help", "-h":
 			printHelp()
 			os.Exit(0)
+		case "-c", "--config":
+			if i+1 < len(args) {
+				configPath = args[i+1]
+				i++ // Skip the next argument
+			} else {
+				fmt.Println("Error: -c/--config requires a path argument")
+				os.Exit(1)
+			}
+		default:
+			// Check for -c=/path or --config=/path format
+			if len(args[i]) > 3 && args[i][:3] == "-c=" {
+				configPath = args[i][3:]
+			} else if len(args[i]) > 9 && args[i][:9] == "--config=" {
+				configPath = args[i][9:]
+			}
 		}
 	}
 
@@ -56,7 +74,7 @@ func main() {
 	)
 
 	// Load configuration
-	cfg, err := config.Load()
+	cfg, err := config.LoadWithPath(configPath)
 	if err != nil {
 		log.Fatal("Failed to load configuration", "error", err)
 	}
@@ -490,17 +508,24 @@ func printHelp() {
 	fmt.Println(`VPanel Server - Enterprise Server Management Panel
 
 Usage:
-  vpanel-server [command]
+  vpanel-server [options] [command]
 
 Commands:
   (none)           Start the server
   version          Show version information
   --help, -h       Show this help message
 
+Options:
+  -c, --config     Path to config file (default: config.yaml)
+
 Environment Variables:
   VPANEL_CONFIG    Path to config file (default: config.yaml)
   VPANEL_PORT      Server port (default: 8080)
   VPANEL_MODE      Server mode: debug, release (default: debug)
+
+Examples:
+  vpanel-server                          Start with default config
+  vpanel-server -c /etc/vpanel/config.yaml   Start with custom config
 
 For more information, visit: https://vpanel.io/docs`)
 }
