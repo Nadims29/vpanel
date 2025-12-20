@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { checkDockerStatus, DockerInfo } from '@/api/docker';
+import { checkDockerStatus, DockerInfo } from '@plugins/docker/frontend/api/docker';
 
 export interface DockerStatus {
   available: boolean;

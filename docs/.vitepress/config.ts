@@ -26,7 +26,7 @@ export default defineConfig({
       {
         text: '相关链接',
         items: [
-          { text: 'GitHub', link: 'https://github.com/zsoft-vpanel/vpanel' },
+          { text: 'GitHub', link: 'https://github.com/zsai001/vpanel' },
           { text: 'VCloud', link: 'https://vcloud.zsoft.cc' },
         ]
       }

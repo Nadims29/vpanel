@@ -1,0 +1,12 @@
+{
+  "id": "firewall",
+  "name": "Firewall",
+  "version": "1.0.0",
+  "description": "Firewall rules management",
+  "author": "VPanel Team",
+  "category": "security",
+  "icon": "shield",
+  "menus": [
+    {"title": "Firewall", "icon": "shield", "path": "/firewall/rules", "order": 55}
+  ]
+}

@@ -1,0 +1,23 @@
+{
+  "id": "database",
+  "name": "Database Management",
+  "version": "1.0.0",
+  "description": "MySQL, PostgreSQL, Redis database management",
+  "author": "VPanel Team",
+  "category": "infrastructure",
+  "icon": "database",
+  "permissions": ["database.read", "database.write", "database.admin"],
+  "dependencies": ["docker"],
+  "menus": [
+    {
+      "title": "Database",
+      "icon": "database",
+      "path": "/database",
+      "order": 30,
+      "children": [
+        {"title": "Servers", "path": "/database/servers", "order": 0},
+        {"title": "Backups", "path": "/database/backups", "order": 1}
+      ]
+    }
+  ]
+}

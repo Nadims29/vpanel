@@ -53,8 +53,8 @@ func (p *BasePlugin) Context() *Context {
 	return p.ctx
 }
 
-// PluginInfo contains basic plugin information.
-type PluginInfo struct {
+// BasicPluginInfo contains basic plugin information.
+type BasicPluginInfo struct {
 	ID          string
 	Name        string
 	Version     string
@@ -63,11 +63,11 @@ type PluginInfo struct {
 }
 
 // GetInfo returns plugin information from the base plugin.
-func (p *BasePlugin) GetInfo() *PluginInfo {
+func (p *BasePlugin) GetInfo() *BasicPluginInfo {
 	if p.ctx == nil {
 		return nil
 	}
-	return &PluginInfo{
+	return &BasicPluginInfo{
 		ID: p.ctx.PluginID,
 	}
 }

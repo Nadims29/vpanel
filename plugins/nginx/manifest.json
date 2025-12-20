@@ -1,0 +1,24 @@
+{
+  "id": "nginx",
+  "name": "Nginx Management",
+  "version": "1.0.0",
+  "description": "Nginx web server management",
+  "author": "VPanel Team",
+  "category": "infrastructure",
+  "icon": "globe",
+  "permissions": ["nginx.read", "nginx.write"],
+  "menus": [
+    {
+      "title": "Nginx",
+      "icon": "globe",
+      "path": "/nginx",
+      "order": 20,
+      "children": [
+        {"title": "Instances", "path": "/nginx/instances", "order": 0},
+        {"title": "Sites", "path": "/nginx/sites", "order": 1},
+        {"title": "Certificates", "path": "/nginx/certificates", "order": 2},
+        {"title": "Logs", "path": "/nginx/logs", "order": 3}
+      ]
+    }
+  ]
+}

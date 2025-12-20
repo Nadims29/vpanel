@@ -1,174 +1,112 @@
-// Note: get, post, put, del will be used when backend supports custom roles
-import * as usersApi from './users';
+import { get, post, put, del } from './client';
+import type { User } from './users';
 
-// Role interface
+// Role interface matching backend model
 export interface Role {
   id: string;
   name: string;
+  display_name: string;
   description: string;
-  type: 'system' | 'custom';
-  userCount: number;
-  permissions: { [key: string]: ('read' | 'write' | 'delete' | 'admin')[] };
-  createdAt: string;
-  updatedAt: string;
+  permissions: string[];
+  is_system: boolean;
+  priority: number;
+  user_count?: number;
+  created_at: string;
+  updated_at: string;
+}
+
+// Permission interface matching backend model
+export interface Permission {
+  id: number;
+  name: string;
+  display_name: string;
+  description: string;
+  category: string;
+  is_system: boolean;
 }
 
 // Create role request
 export interface CreateRoleRequest {
   name: string;
-  description: string;
-  permissions: { [key: string]: ('read' | 'write' | 'delete' | 'admin')[] };
+  display_name?: string;
+  description?: string;
+  permissions?: string[];
+  priority?: number;
 }
 
 // Update role request
 export interface UpdateRoleRequest {
-  name?: string;
+  display_name?: string;
   description?: string;
-  permissions?: { [key: string]: ('read' | 'write' | 'delete' | 'admin')[] };
+  permissions?: string[];
+  priority?: number;
 }
 
-type Permission = 'read' | 'write' | 'delete' | 'admin';
-
-// System roles definition
-const SYSTEM_ROLES: {
-  id: string;
-  name: string;
-  description: string;
-  permissions: { [key: string]: Permission[] };
-}[] = [
-  {
-    id: 'super_admin',
-    name: 'Super Admin',
-    description: 'Full system access with all permissions',
-    permissions: { '*': ['read', 'write', 'delete', 'admin'] as Permission[] },
-  },
-  {
-    id: 'admin',
-    name: 'Admin',
-    description: 'Administrative access to most features',
-    permissions: {
-      'docker.*': ['read', 'write', 'delete'] as Permission[],
-      'nginx.*': ['read', 'write', 'delete'] as Permission[],
-      'database.*': ['read', 'write'] as Permission[],
-      'files.*': ['read', 'write'] as Permission[],
-      'terminal.*': ['read'] as Permission[],
-      'settings.users': ['read'] as Permission[],
-    },
-  },
-  {
-    id: 'operator',
-    name: 'Operator',
-    description: 'Operational access for day-to-day tasks',
-    permissions: {
-      'docker.containers': ['read', 'write'] as Permission[],
-      'docker.images': ['read'] as Permission[],
-      'nginx.sites': ['read', 'write'] as Permission[],
-      'files.*': ['read', 'write'] as Permission[],
-      'terminal.access': ['read'] as Permission[],
-      'cron.jobs': ['read', 'write'] as Permission[],
-    },
-  },
-  {
-    id: 'viewer',
-    name: 'Viewer',
-    description: 'Read-only access to view resources',
-    permissions: {
-      '*': ['read'] as Permission[],
-    },
-  },
-  {
-    id: 'user',
-    name: 'User',
-    description: 'Basic user access',
-    permissions: {},
-  },
-];
-
-// List all roles (combines system roles with user data)
+// List all roles
 export async function listRoles(): Promise<Role[]> {
-  try {
-    // Get all users to count role usage
-    const users = await usersApi.listUsers();
-    
-    // Count users per role
-    const roleCounts: { [key: string]: number } = {};
-    users.forEach(user => {
-      const role = user.role || 'user';
-      roleCounts[role] = (roleCounts[role] || 0) + 1;
-    });
-
-    // Build system roles with user counts
-    const systemRoles: Role[] = SYSTEM_ROLES.map(sysRole => ({
-      id: sysRole.id,
-      name: sysRole.name,
-      description: sysRole.description,
-      type: 'system' as const,
-      userCount: roleCounts[sysRole.id] || 0,
-      permissions: sysRole.permissions,
-      createdAt: '2024-01-01',
-      updatedAt: new Date().toISOString().split('T')[0],
-    }));
-
-    // For now, we'll return system roles only
-    // Custom roles would need backend support
-    return systemRoles;
-  } catch (error) {
-    console.error('Failed to list roles:', error);
-    // Return system roles as fallback
-    return SYSTEM_ROLES.map(sysRole => ({
-      id: sysRole.id,
-      name: sysRole.name,
-      description: sysRole.description,
-      type: 'system' as const,
-      userCount: 0,
-      permissions: sysRole.permissions,
-      createdAt: '2024-01-01',
-      updatedAt: new Date().toISOString().split('T')[0],
-    }));
-  }
+  return get<Role[]>('/admin/roles');
 }
 
 // Get role by ID
 export async function getRole(id: string): Promise<Role> {
-  const roles = await listRoles();
-  const role = roles.find(r => r.id === id);
-  if (!role) {
-    throw new Error('Role not found');
-  }
-  return role;
+  return get<Role>(`/admin/roles/${id}`);
 }
 
-// Create a custom role (would need backend support)
-export async function createRole(_data: CreateRoleRequest): Promise<Role> {
-  // TODO: Implement when backend supports custom roles
-  // For now, this is a placeholder
-  throw new Error('Custom roles not yet supported by backend');
+// Create a new role
+export async function createRole(data: CreateRoleRequest): Promise<Role> {
+  return post<Role>('/admin/roles', data);
 }
 
-// Update role (system roles are read-only, custom roles can be updated)
-export async function updateRole(_id: string, _data: UpdateRoleRequest): Promise<Role> {
-  // TODO: Implement when backend supports custom roles
-  throw new Error('Role updates not yet supported by backend');
+// Update role
+export async function updateRole(id: string, data: UpdateRoleRequest): Promise<Role> {
+  return put<Role>(`/admin/roles/${id}`, data);
 }
 
 // Delete role
-export async function deleteRole(_id: string): Promise<void> {
-  // TODO: Implement when backend supports custom roles
-  throw new Error('Role deletion not yet supported by backend');
+export async function deleteRole(id: string): Promise<void> {
+  return del<void>(`/admin/roles/${id}`);
 }
 
 // Get users with a specific role
-export async function getRoleUsers(roleId: string): Promise<usersApi.User[]> {
-  const users = await usersApi.listUsers();
-  return users.filter(user => (user.role || 'user') === roleId);
+export async function getRoleUsers(
+  roleId: string, 
+  params?: { page?: number; per_page?: number }
+): Promise<{ data: User[]; total: number; page: number; per_page: number }> {
+  const queryParams = new URLSearchParams();
+  if (params?.page) queryParams.set('page', params.page.toString());
+  if (params?.per_page) queryParams.set('per_page', params.per_page.toString());
+  
+  const query = queryParams.toString();
+  return get(`/admin/roles/${roleId}/users${query ? `?${query}` : ''}`);
 }
 
-// Update user permissions (uses existing user API)
-export async function updateRolePermissions(roleId: string, permissions: string[]): Promise<void> {
-  // This would update all users with this role
-  // For now, we'll need to update users individually
-  const users = await getRoleUsers(roleId);
-  for (const user of users) {
-    await usersApi.updateUserPermissions(user.id, permissions);
-  }
+// Assign role to user
+export async function assignUserRole(userId: string, role: string): Promise<void> {
+  return put<void>(`/admin/users/${userId}/role`, { role });
+}
+
+// List all permissions
+export async function listPermissions(): Promise<Permission[]> {
+  return get<Permission[]>('/admin/permissions');
+}
+
+// List permissions grouped by category
+export async function listPermissionsGrouped(): Promise<Record<string, Permission[]>> {
+  return get<Record<string, Permission[]>>('/admin/permissions?grouped=true');
+}
+
+// Get current user's effective permissions
+export async function getMyPermissions(): Promise<string[]> {
+  const response = await get<{ permissions: string[] }>('/profile/permissions');
+  return response.permissions;
+}
+
+// Helper function to check if a role is a system role
+export function isSystemRole(role: Role): boolean {
+  return role.is_system;
+}
+
+// Helper function to get role type label
+export function getRoleTypeLabel(role: Role): 'system' | 'custom' {
+  return role.is_system ? 'system' : 'custom';
 }

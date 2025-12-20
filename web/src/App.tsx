@@ -1,40 +1,37 @@
-import { useEffect } from 'react';
+import { useEffect, Suspense, lazy } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { useAuthStore } from '@/stores/auth';
 import { useThemeStore } from '@/stores/theme';
+import { useLicenseStore } from '@/stores/license';
 import MainLayout from '@/components/layout/MainLayout';
 import AuthLayout from '@/components/layout/AuthLayout';
+import { Loader2 } from 'lucide-react';
 
-// Pages
-import Dashboard from '@/pages/Dashboard';
+// Import plugin registry
+import { pluginRegistry } from '@/plugins/registry';
+
+// Core pages (not plugins - these stay in web/src/pages)
 import Login from '@/pages/Login';
-import DockerContainers from '@/pages/docker/Containers';
-import DockerImages from '@/pages/docker/Images';
-import DockerNetworks from '@/pages/docker/Networks';
-import DockerVolumes from '@/pages/docker/Volumes';
-import DockerCompose from '@/pages/docker/Compose';
-import AppsList from '@/pages/apps/List';
-import AppsCreate from '@/pages/apps/Create';
-import AppsDetail from '@/pages/apps/Detail';
-import NginxInstances from '@/pages/nginx/Instances';
-import NginxSites from '@/pages/nginx/Sites';
-import NginxCertificates from '@/pages/nginx/Certificates';
-import NginxLogs from '@/pages/nginx/Logs';
-import DatabaseServers from '@/pages/database/Servers';
-import DatabaseBackups from '@/pages/database/Backups';
-import FileManager from '@/pages/files/FileManager';
-import Terminal from '@/pages/Terminal';
-import CronJobs from '@/pages/cron/Jobs';
-import FirewallRules from '@/pages/firewall/Rules';
-import SoftwareList from '@/pages/software/List';
-import PluginList from '@/pages/plugins/List';
-import PluginMarket from '@/pages/plugins/Market';
-import PluginPage from '@/pages/plugins/PluginPage';
-import Users from '@/pages/settings/Users';
-import Roles from '@/pages/settings/Roles';
-import Teams from '@/pages/settings/Teams';
-import SystemSettings from '@/pages/settings/System';
-import AuditLogs from '@/pages/logs/Audit';
+
+// Settings pages (core functionality, not plugins)
+const Users = lazy(() => import('@/pages/settings/Users'));
+const Roles = lazy(() => import('@/pages/settings/Roles'));
+const Teams = lazy(() => import('@/pages/settings/Teams'));
+const SystemSettings = lazy(() => import('@/pages/settings/System'));
+const PluginsSettings = lazy(() => import('@/pages/settings/Plugins'));
+const License = lazy(() => import('@/pages/settings/License'));
+
+// Other core pages
+const AuditLogs = lazy(() => import('@/pages/logs/Audit'));
+
+// Loading fallback
+function LoadingFallback() {
+  return (
+    <div className="flex items-center justify-center h-64">
+      <Loader2 className="w-8 h-8 animate-spin text-gray-400" />
+    </div>
+  );
+}
 
 // Protected route wrapper
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -48,10 +45,23 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 }
 
 function App() {
+  const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
+  const fetchLicense = useLicenseStore((state) => state.fetchLicense);
+
   // Initialize theme on mount
   useEffect(() => {
     useThemeStore.getState();
   }, []);
+
+  // Fetch license when authenticated
+  useEffect(() => {
+    if (isAuthenticated) {
+      fetchLicense();
+    }
+  }, [isAuthenticated, fetchLicense]);
+
+  // Get all plugin routes
+  const pluginRoutes = pluginRegistry.getAllRoutes();
 
   return (
     <Routes>
@@ -68,60 +78,78 @@ function App() {
           </ProtectedRoute>
         }
       >
-        {/* Dashboard */}
-        <Route path="/" element={<Dashboard />} />
-        <Route path="/dashboard" element={<Dashboard />} />
+        {/* Plugin routes - dynamically loaded from registry */}
+        {pluginRoutes.map((route) => (
+          <Route
+            key={route.path}
+            path={route.path}
+            element={
+              <Suspense fallback={<LoadingFallback />}>
+                <route.component />
+              </Suspense>
+            }
+          />
+        ))}
 
-        {/* Docker */}
-        <Route path="/docker/containers" element={<DockerContainers />} />
-        <Route path="/docker/images" element={<DockerImages />} />
-        <Route path="/docker/networks" element={<DockerNetworks />} />
-        <Route path="/docker/volumes" element={<DockerVolumes />} />
-        <Route path="/docker/compose" element={<DockerCompose />} />
+        {/* Settings (core functionality - auth, users, system) */}
+        <Route
+          path="/settings/users"
+          element={
+            <Suspense fallback={<LoadingFallback />}>
+              <Users />
+            </Suspense>
+          }
+        />
+        <Route
+          path="/settings/roles"
+          element={
+            <Suspense fallback={<LoadingFallback />}>
+              <Roles />
+            </Suspense>
+          }
+        />
+        <Route
+          path="/settings/teams"
+          element={
+            <Suspense fallback={<LoadingFallback />}>
+              <Teams />
+            </Suspense>
+          }
+        />
+        <Route
+          path="/settings/system"
+          element={
+            <Suspense fallback={<LoadingFallback />}>
+              <SystemSettings />
+            </Suspense>
+          }
+        />
+        <Route
+          path="/settings/plugins"
+          element={
+            <Suspense fallback={<LoadingFallback />}>
+              <PluginsSettings />
+            </Suspense>
+          }
+        />
+        <Route
+          path="/settings/license"
+          element={
+            <Suspense fallback={<LoadingFallback />}>
+              <License />
+            </Suspense>
+          }
+        />
 
-        {/* Apps */}
-        <Route path="/apps" element={<AppsList />} />
-        <Route path="/apps/create" element={<AppsCreate />} />
-        <Route path="/apps/:id" element={<AppsDetail />} />
-
-        {/* Nginx */}
-        <Route path="/nginx/instances" element={<NginxInstances />} />
-        <Route path="/nginx/sites" element={<NginxSites />} />
-        <Route path="/nginx/certificates" element={<NginxCertificates />} />
-        <Route path="/nginx/logs" element={<NginxLogs />} />
-
-        {/* Database */}
-        <Route path="/database/servers" element={<DatabaseServers />} />
-        <Route path="/database/backups" element={<DatabaseBackups />} />
-
-        {/* Files */}
-        <Route path="/files" element={<FileManager />} />
-
-        {/* Terminal */}
-        <Route path="/terminal" element={<Terminal />} />
-
-        {/* Cron */}
-        <Route path="/cron/jobs" element={<CronJobs />} />
-
-        {/* Firewall */}
-        <Route path="/firewall/rules" element={<FirewallRules />} />
-
-        {/* Software */}
-        <Route path="/software" element={<SoftwareList />} />
-
-        {/* Plugins */}
-        <Route path="/plugins" element={<PluginList />} />
-        <Route path="/plugins/market" element={<PluginMarket />} />
-        <Route path="/plugins/:pluginId/*" element={<PluginPage />} />
-
-        {/* Settings */}
-        <Route path="/settings/users" element={<Users />} />
-        <Route path="/settings/roles" element={<Roles />} />
-        <Route path="/settings/teams" element={<Teams />} />
-        <Route path="/settings/system" element={<SystemSettings />} />
-
-        {/* Logs */}
-        <Route path="/logs/audit" element={<AuditLogs />} />
+        {/* Logs (core functionality) */}
+        <Route
+          path="/logs/audit"
+          element={
+            <Suspense fallback={<LoadingFallback />}>
+              <AuditLogs />
+            </Suspense>
+          }
+        />
       </Route>
 
       {/* Fallback */}
@@ -131,4 +159,3 @@ function App() {
 }
 
 export default App;
-

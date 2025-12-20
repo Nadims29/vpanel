@@ -41,22 +41,33 @@ api.interceptors.request.use(
   }
 );
 
+// Extended config type to track retry state
+interface ExtendedAxiosRequestConfig extends InternalAxiosRequestConfig {
+  _retry?: boolean;
+}
+
 // Response interceptor
 api.interceptors.response.use(
   (response) => {
     return response;
   },
   async (error: AxiosError<ApiResponse>) => {
-    const originalRequest = error.config;
+    const originalRequest = error.config as ExtendedAxiosRequestConfig | undefined;
 
-    // Handle 401 Unauthorized
-    if (error.response?.status === 401 && originalRequest) {
+    // Handle 401 Unauthorized - only retry once
+    if (error.response?.status === 401 && originalRequest && !originalRequest._retry) {
       const authStore = useAuthStore.getState();
       
-      // Try to refresh token
+      // Try to refresh token only if we have one
       if (authStore.refreshToken) {
+        originalRequest._retry = true; // Mark as retried to prevent infinite loop
         try {
           await authStore.refreshAuth();
+          // Update the Authorization header with new token
+          const newToken = useAuthStore.getState().token;
+          if (newToken) {
+            originalRequest.headers.Authorization = `Bearer ${newToken}`;
+          }
           // Retry original request
           return api(originalRequest);
         } catch {
@@ -78,9 +89,10 @@ export default api;
 function extractErrorMessage(error: unknown): string {
   if (axios.isAxiosError(error)) {
     const axiosError = error as AxiosError<ApiResponse>;
-    // Try to get message from response body
-    if (axiosError.response?.data?.error?.message) {
-      return axiosError.response.data.error.message;
+    const data = axiosError.response?.data;
+    // Try to get message from response body (structured error)
+    if (data?.error?.message) {
+      return data.error.message;
     }
     // Fallback to status text
     if (axiosError.response?.statusText) {

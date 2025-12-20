@@ -9,7 +9,6 @@ import {
   Edit,
   Copy,
   Users,
-  Lock,
   Eye,
   Pencil,
   Settings,
@@ -24,6 +23,7 @@ import {
   FileText,
   Loader2,
   AlertCircle,
+  CheckCircle2,
 } from 'lucide-react';
 import {
   Button,
@@ -37,130 +37,105 @@ import {
   ConfirmModal,
   Empty,
   Input,
+  PermissionGuard,
 } from '@/components/ui';
 import { cn } from '@/utils/cn';
 import { useThemeStore } from '@/stores/theme';
 import * as rolesApi from '@/api/roles';
-import type { Role } from '@/api/roles';
+import type { Role, Permission } from '@/api/roles';
 
-// Role interface is imported from API
-
+// Permission categories for UI display
 const permissionCategories = [
   {
-    id: 'servers',
-    name: 'Servers & Nodes',
-    icon: Server,
-    permissions: [
-      { id: 'nodes', name: 'Node Management', description: 'Manage server nodes' },
-      { id: 'monitoring', name: 'Monitoring', description: 'View server metrics and alerts' },
-    ],
+    id: 'sites',
+    name: 'Sites & Apps',
+    icon: Globe,
+    description: 'Manage websites and applications',
   },
   {
     id: 'docker',
     name: 'Docker',
     icon: Container,
-    permissions: [
-      { id: 'containers', name: 'Containers', description: 'Manage Docker containers' },
-      { id: 'images', name: 'Images', description: 'Manage Docker images' },
-      { id: 'networks', name: 'Networks', description: 'Manage Docker networks' },
-      { id: 'volumes', name: 'Volumes', description: 'Manage Docker volumes' },
-      { id: 'compose', name: 'Compose', description: 'Manage Docker Compose stacks' },
-    ],
-  },
-  // Kubernetes management is available in VPanel Cloud (Enterprise Edition)
-  // See: https://github.com/zsoft-vpanel/vpanel-cloud
-  {
-    id: 'nginx',
-    name: 'Nginx',
-    icon: Globe,
-    permissions: [
-      { id: 'sites', name: 'Sites', description: 'Manage Nginx sites' },
-      { id: 'certificates', name: 'Certificates', description: 'Manage SSL certificates' },
-      { id: 'logs', name: 'Logs', description: 'View Nginx logs' },
-    ],
+    description: 'Container management',
   },
   {
     id: 'database',
     name: 'Database',
     icon: Database,
-    permissions: [
-      { id: 'servers', name: 'DB Servers', description: 'Manage database servers' },
-      { id: 'backups', name: 'Backups', description: 'Manage database backups' },
-    ],
+    description: 'Database servers and backups',
   },
   {
     id: 'files',
     name: 'File Manager',
     icon: FolderOpen,
-    permissions: [
-      { id: 'browse', name: 'Browse', description: 'Browse files' },
-      { id: 'edit', name: 'Edit', description: 'Edit files' },
-      { id: 'upload', name: 'Upload', description: 'Upload files' },
-    ],
+    description: 'File system access',
   },
   {
     id: 'terminal',
     name: 'Terminal',
     icon: Terminal,
-    permissions: [
-      { id: 'access', name: 'Terminal Access', description: 'Access web terminal' },
-      { id: 'ssh', name: 'SSH', description: 'SSH to servers' },
-    ],
+    description: 'Command line access',
   },
   {
     id: 'cron',
     name: 'Cron Jobs',
     icon: Clock,
-    permissions: [
-      { id: 'jobs', name: 'Jobs', description: 'Manage cron jobs' },
-    ],
+    description: 'Scheduled tasks',
   },
   {
-    id: 'plugins',
-    name: 'Plugins',
-    icon: Puzzle,
-    permissions: [
-      { id: 'installed', name: 'Installed', description: 'Manage installed plugins' },
-      { id: 'market', name: 'Market', description: 'Access plugin market' },
-    ],
+    id: 'firewall',
+    name: 'Firewall',
+    icon: Shield,
+    description: 'Network security',
+  },
+  {
+    id: 'monitor',
+    name: 'Monitoring',
+    icon: Server,
+    description: 'System monitoring',
+  },
+  {
+    id: 'users',
+    name: 'Users & Roles',
+    icon: Users,
+    description: 'User management',
   },
   {
     id: 'settings',
     name: 'Settings',
     icon: Settings,
-    permissions: [
-      { id: 'users', name: 'Users', description: 'Manage users' },
-      { id: 'roles', name: 'Roles', description: 'Manage roles' },
-      { id: 'teams', name: 'Teams', description: 'Manage teams' },
-      { id: 'system', name: 'System', description: 'System settings' },
-    ],
+    description: 'System settings',
   },
   {
-    id: 'logs',
-    name: 'Logs',
+    id: 'plugins',
+    name: 'Plugins',
+    icon: Puzzle,
+    description: 'Plugin management',
+  },
+  {
+    id: 'audit',
+    name: 'Audit Logs',
     icon: FileText,
-    permissions: [
-      { id: 'audit', name: 'Audit Logs', description: 'View audit logs' },
-    ],
+    description: 'Activity logs',
   },
 ];
-
-// Roles are loaded from API
 
 function RoleCard({ 
   role, 
   onEdit, 
-  onDelete 
+  onDelete,
+  onViewUsers,
 }: { 
   role: Role; 
   onEdit: () => void;
   onDelete: () => void;
+  onViewUsers: () => void;
 }) {
   const [showDelete, setShowDelete] = useState(false);
   const resolvedMode = useThemeStore((state) => state.resolvedMode);
   const isLight = resolvedMode === 'light';
 
-  const isSystemRole = role.type === 'system';
+  const isSystemRole = role.is_system;
   const RoleIcon = isSystemRole ? ShieldCheck : Shield;
 
   return (
@@ -183,7 +158,9 @@ function RoleCard({
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h3 className={cn('font-semibold', isLight ? 'text-gray-900' : 'text-gray-100')}>{role.name}</h3>
+                <h3 className={cn('font-semibold', isLight ? 'text-gray-900' : 'text-gray-100')}>
+                  {role.display_name || role.name}
+                </h3>
                 {isSystemRole && <Badge variant="gray" className="text-xs">System</Badge>}
               </div>
               <p className={cn('text-sm', isLight ? 'text-gray-500' : 'text-gray-400')}>{role.description}</p>
@@ -202,8 +179,12 @@ function RoleCard({
             <DropdownItem icon={<Edit className="w-4 h-4" />} onClick={onEdit}>
               {isSystemRole ? 'View' : 'Edit'}
             </DropdownItem>
-            <DropdownItem icon={<Copy className="w-4 h-4" />}>Duplicate</DropdownItem>
-            <DropdownItem icon={<Users className="w-4 h-4" />}>View Users</DropdownItem>
+            {!isSystemRole && (
+              <DropdownItem icon={<Copy className="w-4 h-4" />}>Duplicate</DropdownItem>
+            )}
+            <DropdownItem icon={<Users className="w-4 h-4" />} onClick={onViewUsers}>
+              View Users ({role.user_count || 0})
+            </DropdownItem>
             {!isSystemRole && (
               <>
                 <DropdownDivider />
@@ -218,10 +199,13 @@ function RoleCard({
         <div className="flex items-center gap-4 text-sm">
           <div className="flex items-center gap-1.5">
             <Users className={cn('w-4 h-4', isLight ? 'text-gray-400' : 'text-gray-500')} />
-            <span className={isLight ? 'text-gray-600' : 'text-gray-400'}>{role.userCount} users</span>
+            <span className={isLight ? 'text-gray-600' : 'text-gray-400'}>{role.user_count || 0} users</span>
           </div>
-          <div className={cn('text-xs', isLight ? 'text-gray-400' : 'text-gray-500')}>
-            Updated {new Date(role.updatedAt).toLocaleDateString()}
+          <div className="flex items-center gap-1.5">
+            <Shield className={cn('w-4 h-4', isLight ? 'text-gray-400' : 'text-gray-500')} />
+            <span className={isLight ? 'text-gray-600' : 'text-gray-400'}>
+              {role.permissions?.includes('*') ? 'All permissions' : `${role.permissions?.length || 0} permissions`}
+            </span>
           </div>
         </div>
       </motion.div>
@@ -235,31 +219,40 @@ function RoleCard({
         }}
         type="danger"
         title="Delete Role"
-        message={`Are you sure you want to delete "${role.name}"? Users with this role will be assigned to Viewer role.`}
+        message={`Are you sure you want to delete "${role.display_name || role.name}"? This action cannot be undone.`}
         confirmText="Delete"
       />
     </>
   );
 }
 
-function RoleEditor({ 
-  role, 
-  readOnly, 
-  onClose,
-  onSave 
-}: { 
+interface RoleEditorProps {
   role?: Role; 
+  permissions: Permission[];
   readOnly?: boolean; 
   onClose: () => void;
-  onSave?: (roleData: { name: string; description: string; permissions: { [key: string]: ('read' | 'write' | 'delete' | 'admin')[] } }) => void;
-}) {
+  onSave?: (roleData: rolesApi.CreateRoleRequest | rolesApi.UpdateRoleRequest) => Promise<void>;
+}
+
+function RoleEditor({ role, permissions, readOnly, onClose, onSave }: RoleEditorProps) {
   const resolvedMode = useThemeStore((state) => state.resolvedMode);
   const isLight = resolvedMode === 'light';
   const [expandedCategories, setExpandedCategories] = useState<string[]>(permissionCategories.map(c => c.id));
   const [name, setName] = useState(role?.name || '');
+  const [displayName, setDisplayName] = useState(role?.display_name || '');
   const [description, setDescription] = useState(role?.description || '');
-  const [permissions, setPermissions] = useState<{ [key: string]: ('read' | 'write' | 'delete' | 'admin')[] }>(role?.permissions || {});
+  const [selectedPermissions, setSelectedPermissions] = useState<string[]>(role?.permissions || []);
+  const [priority, setPriority] = useState(role?.priority || 10);
   const [saving, setSaving] = useState(false);
+
+  // Group permissions by category
+  const permissionsByCategory = permissions.reduce((acc, perm) => {
+    if (!acc[perm.category]) {
+      acc[perm.category] = [];
+    }
+    acc[perm.category].push(perm);
+    return acc;
+  }, {} as Record<string, Permission[]>);
 
   const toggleCategory = (categoryId: string) => {
     setExpandedCategories(prev =>
@@ -269,66 +262,54 @@ function RoleEditor({
     );
   };
 
-  const togglePermission = (categoryId: string, permissionId: string, action: 'read' | 'write' | 'delete' | 'admin') => {
+  const togglePermission = (permissionName: string) => {
     if (readOnly) return;
     
-    const key = `${categoryId}.${permissionId}`;
-    const wildcardKey = `${categoryId}.*`;
-    const allKey = '*';
-    
-    setPermissions(prev => {
-      const newPerms = { ...prev };
-      
-      // Check if wildcard or all permissions exist
-      const hasWildcard = newPerms[wildcardKey]?.includes(action);
-      const hasAll = newPerms[allKey]?.includes(action);
-      const hasSpecific = newPerms[key]?.includes(action);
-      
-      if (hasAll || hasWildcard || hasSpecific) {
-        // Remove permission
-        if (newPerms[key]) {
-          newPerms[key] = newPerms[key].filter(a => a !== action);
-          if (newPerms[key].length === 0) delete newPerms[key];
-        }
-        if (newPerms[wildcardKey]) {
-          newPerms[wildcardKey] = newPerms[wildcardKey].filter(a => a !== action);
-          if (newPerms[wildcardKey].length === 0) delete newPerms[wildcardKey];
-        }
-        if (newPerms[allKey]) {
-          newPerms[allKey] = newPerms[allKey].filter(a => a !== action);
-          if (newPerms[allKey].length === 0) delete newPerms[allKey];
-        }
-      } else {
-        // Add permission
-        if (!newPerms[key]) {
-          newPerms[key] = [];
-        }
-        if (!newPerms[key].includes(action)) {
-          newPerms[key].push(action);
-        }
+    setSelectedPermissions(prev => {
+      if (prev.includes(permissionName)) {
+        return prev.filter(p => p !== permissionName);
       }
-      
-      return newPerms;
+      return [...prev, permissionName];
     });
   };
 
-  const hasPermission = (categoryId: string, permissionId: string, action: 'read' | 'write' | 'delete' | 'admin'): boolean => {
-    const key = `${categoryId}.${permissionId}`;
-    const wildcardKey = `${categoryId}.*`;
-    const allKey = '*';
+  const toggleCategoryAll = (categoryId: string) => {
+    if (readOnly) return;
     
-    return !!(
-      permissions[allKey]?.includes(action) ||
-      permissions[wildcardKey]?.includes(action) ||
-      permissions[key]?.includes(action)
-    );
+    const categoryPerms = permissionsByCategory[categoryId] || [];
+    const categoryPermNames = categoryPerms.map(p => p.name);
+    
+    const allSelected = categoryPermNames.every(p => selectedPermissions.includes(p));
+    
+    if (allSelected) {
+      setSelectedPermissions(prev => prev.filter(p => !categoryPermNames.includes(p)));
+    } else {
+      setSelectedPermissions(prev => [...new Set([...prev, ...categoryPermNames])]);
+    }
   };
 
   const handleSave = async () => {
     if (!onSave || readOnly) return;
     try {
       setSaving(true);
-      await onSave({ name, description, permissions });
+      if (role) {
+        // Update existing role
+        await onSave({
+          display_name: displayName,
+          description,
+          permissions: selectedPermissions,
+          priority,
+        });
+      } else {
+        // Create new role
+        await onSave({
+          name,
+          display_name: displayName || name,
+          description,
+          permissions: selectedPermissions,
+          priority,
+        });
+      }
       onClose();
     } catch (error) {
       console.error('Failed to save role:', error);
@@ -337,41 +318,76 @@ function RoleEditor({
     }
   };
 
+  const hasAllPermissions = selectedPermissions.includes('*');
+
   return (
     <div className="space-y-6">
-      {!readOnly && (
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className={cn('block text-sm font-medium mb-1.5', isLight ? 'text-gray-700' : 'text-gray-300')}>
-              Role Name
-            </label>
-            <Input 
-              value={name} 
-              onChange={(e) => setName(e.target.value)}
-              placeholder="Enter role name" 
-              disabled={saving}
-            />
-          </div>
-          <div>
-            <label className={cn('block text-sm font-medium mb-1.5', isLight ? 'text-gray-700' : 'text-gray-300')}>
-              Description
-            </label>
-            <Input 
-              value={description} 
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder="Enter description" 
-              disabled={saving}
-            />
-          </div>
+      {/* Basic Info */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <label className={cn('block text-sm font-medium mb-1.5', isLight ? 'text-gray-700' : 'text-gray-300')}>
+            Role Name
+          </label>
+          <Input 
+            value={role ? role.name : name} 
+            onChange={(e) => setName(e.target.value)}
+            placeholder="e.g., developer" 
+            disabled={saving || readOnly || !!role}
+          />
+          {!role && (
+            <p className={cn('text-xs mt-1', isLight ? 'text-gray-500' : 'text-gray-400')}>
+              Unique identifier (lowercase, no spaces)
+            </p>
+          )}
+        </div>
+        <div>
+          <label className={cn('block text-sm font-medium mb-1.5', isLight ? 'text-gray-700' : 'text-gray-300')}>
+            Display Name
+          </label>
+          <Input 
+            value={displayName} 
+            onChange={(e) => setDisplayName(e.target.value)}
+            placeholder="e.g., Developer" 
+            disabled={saving || readOnly}
+          />
+        </div>
+      </div>
+
+      <div>
+        <label className={cn('block text-sm font-medium mb-1.5', isLight ? 'text-gray-700' : 'text-gray-300')}>
+          Description
+        </label>
+        <Input 
+          value={description} 
+          onChange={(e) => setDescription(e.target.value)}
+          placeholder="Brief description of this role" 
+          disabled={saving || readOnly}
+        />
+      </div>
+
+      {/* All Permissions Warning */}
+      {hasAllPermissions && (
+        <div className={cn(
+          'flex items-center gap-2 p-3 rounded-lg',
+          isLight ? 'bg-amber-50 text-amber-700' : 'bg-amber-900/20 text-amber-400'
+        )}>
+          <AlertCircle className="w-5 h-5" />
+          <span className="text-sm">This role has full administrative access (all permissions).</span>
         </div>
       )}
 
+      {/* Permissions */}
       <div>
         <h4 className={cn('font-medium mb-4', isLight ? 'text-gray-900' : 'text-gray-100')}>Permissions</h4>
         <div className="space-y-3 max-h-96 overflow-y-auto">
           {permissionCategories.map((category) => {
             const CategoryIcon = category.icon;
             const isExpanded = expandedCategories.includes(category.id);
+            const categoryPerms = permissionsByCategory[category.id] || [];
+            const selectedCount = categoryPerms.filter(p => selectedPermissions.includes(p.name)).length;
+            const allSelected = categoryPerms.length > 0 && selectedCount === categoryPerms.length;
+
+            if (categoryPerms.length === 0) return null;
 
             return (
               <div
@@ -381,71 +397,94 @@ function RoleEditor({
                   isLight ? 'border-gray-200' : 'border-gray-700'
                 )}
               >
-                <button
-                  onClick={() => toggleCategory(category.id)}
+                <div
                   className={cn(
-                    'w-full flex items-center justify-between px-4 py-3 text-left',
+                    'flex items-center justify-between px-4 py-3',
                     isLight ? 'hover:bg-gray-50' : 'hover:bg-gray-800'
                   )}
                 >
-                  <div className="flex items-center gap-3">
+                  <button
+                    onClick={() => toggleCategory(category.id)}
+                    className="flex items-center gap-3 flex-1 text-left"
+                  >
                     <CategoryIcon className={cn('w-5 h-5', isLight ? 'text-gray-500' : 'text-gray-400')} />
-                    <span className={cn('font-medium', isLight ? 'text-gray-900' : 'text-gray-100')}>
-                      {category.name}
-                    </span>
-                  </div>
-                  <span className={cn(
-                    'transform transition-transform',
-                    isExpanded ? 'rotate-180' : ''
-                  )}>▼</span>
-                </button>
+                    <div>
+                      <span className={cn('font-medium', isLight ? 'text-gray-900' : 'text-gray-100')}>
+                        {category.name}
+                      </span>
+                      <span className={cn('text-xs ml-2', isLight ? 'text-gray-500' : 'text-gray-400')}>
+                        {selectedCount}/{categoryPerms.length}
+                      </span>
+                    </div>
+                  </button>
+                  
+                  {!readOnly && !hasAllPermissions && (
+                    <button
+                      onClick={() => toggleCategoryAll(category.id)}
+                      className={cn(
+                        'text-xs px-2 py-1 rounded transition-colors mr-2',
+                        allSelected
+                          ? isLight ? 'bg-blue-100 text-blue-700' : 'bg-blue-900/30 text-blue-400'
+                          : isLight ? 'bg-gray-100 text-gray-600 hover:bg-gray-200' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                      )}
+                    >
+                      {allSelected ? 'Deselect All' : 'Select All'}
+                    </button>
+                  )}
+                  
+                  <button onClick={() => toggleCategory(category.id)}>
+                    <span className={cn(
+                      'transform transition-transform text-sm',
+                      isExpanded ? 'rotate-180' : ''
+                    )}>▼</span>
+                  </button>
+                </div>
 
                 {isExpanded && (
                   <div className={cn('px-4 pb-3 pt-1 border-t', isLight ? 'border-gray-100' : 'border-gray-700')}>
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr className={isLight ? 'text-gray-500' : 'text-gray-400'}>
-                          <th className="text-left py-2 font-medium">Permission</th>
-                          <th className="text-center py-2 font-medium w-16" title="Read">
-                            <Eye className="w-4 h-4 mx-auto" />
-                          </th>
-                          <th className="text-center py-2 font-medium w-16" title="Write">
-                            <Pencil className="w-4 h-4 mx-auto" />
-                          </th>
-                          <th className="text-center py-2 font-medium w-16" title="Delete">
-                            <Trash2 className="w-4 h-4 mx-auto" />
-                          </th>
-                          <th className="text-center py-2 font-medium w-16" title="Admin">
-                            <Lock className="w-4 h-4 mx-auto" />
-                          </th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {category.permissions.map((permission) => (
-                          <tr key={permission.id} className={cn('border-t', isLight ? 'border-gray-100' : 'border-gray-700')}>
-                            <td className="py-2">
-                              <div>
-                                <span className={isLight ? 'text-gray-900' : 'text-gray-100'}>{permission.name}</span>
-                                <p className={cn('text-xs', isLight ? 'text-gray-400' : 'text-gray-500')}>
-                                  {permission.description}
-                                </p>
+                    <div className="space-y-2">
+                      {categoryPerms.map((perm) => {
+                        const isSelected = hasAllPermissions || selectedPermissions.includes(perm.name);
+                        return (
+                          <label
+                            key={perm.name}
+                            className={cn(
+                              'flex items-center gap-3 p-2 rounded cursor-pointer transition-colors',
+                              readOnly || hasAllPermissions ? 'cursor-default' : '',
+                              isSelected
+                                ? isLight ? 'bg-blue-50' : 'bg-blue-900/20'
+                                : isLight ? 'hover:bg-gray-50' : 'hover:bg-gray-800'
+                            )}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={isSelected}
+                              disabled={readOnly || saving || hasAllPermissions}
+                              onChange={() => togglePermission(perm.name)}
+                              className="rounded"
+                            />
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2">
+                                <span className={cn('text-sm font-medium', isLight ? 'text-gray-900' : 'text-gray-100')}>
+                                  {perm.display_name}
+                                </span>
+                                <code className={cn('text-xs px-1 py-0.5 rounded', isLight ? 'bg-gray-100 text-gray-600' : 'bg-gray-700 text-gray-400')}>
+                                  {perm.name}
+                                </code>
                               </div>
-                            </td>
-                            {['read', 'write', 'delete', 'admin'].map((action) => (
-                              <td key={action} className="text-center py-2">
-                                <input
-                                  type="checkbox"
-                                  disabled={readOnly || saving}
-                              checked={hasPermission(category.id, permission.id, action as 'read' | 'write' | 'delete' | 'admin')}
-                              onChange={() => togglePermission(category.id, permission.id, action as 'read' | 'write' | 'delete' | 'admin')}
-                                  className="rounded"
-                                />
-                              </td>
-                            ))}
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                              {perm.description && (
+                                <p className={cn('text-xs', isLight ? 'text-gray-500' : 'text-gray-400')}>
+                                  {perm.description}
+                                </p>
+                              )}
+                            </div>
+                            {isSelected && (
+                              <CheckCircle2 className="w-4 h-4 text-blue-500" />
+                            )}
+                          </label>
+                        );
+                      })}
+                    </div>
                   </div>
                 )}
               </div>
@@ -454,6 +493,7 @@ function RoleEditor({
         </div>
       </div>
 
+      {/* Actions */}
       <div className={cn(
         'flex justify-end gap-3 pt-4 border-t',
         isLight ? 'border-gray-200' : 'border-gray-700'
@@ -462,14 +502,14 @@ function RoleEditor({
           {readOnly ? 'Close' : 'Cancel'}
         </Button>
         {!readOnly && (
-          <Button onClick={handleSave} disabled={saving || !name.trim()}>
+          <Button onClick={handleSave} disabled={saving || (!role && !name.trim())}>
             {saving ? (
               <>
                 <Loader2 className="w-4 h-4 animate-spin mr-2" />
                 Saving...
               </>
             ) : (
-              'Save Role'
+              role ? 'Save Changes' : 'Create Role'
             )}
           </Button>
         )}
@@ -480,8 +520,10 @@ function RoleEditor({
 
 export default function RolesPage() {
   const [roles, setRoles] = useState<Role[]>([]);
+  const [permissions, setPermissions] = useState<Permission[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [showCreate, setShowCreate] = useState(false);
   const [editingRole, setEditingRole] = useState<Role | null>(null);
@@ -489,47 +531,51 @@ export default function RolesPage() {
   const resolvedMode = useThemeStore((state) => state.resolvedMode);
   const isLight = resolvedMode === 'light';
 
-  // Load roles
+  // Load roles and permissions
   useEffect(() => {
-    loadRoles();
+    loadData();
   }, []);
 
-  async function loadRoles() {
+  async function loadData() {
     try {
       setLoading(true);
       setError(null);
-      const data = await rolesApi.listRoles();
-      setRoles(data);
+      const [rolesData, permsData] = await Promise.all([
+        rolesApi.listRoles(),
+        rolesApi.listPermissions(),
+      ]);
+      setRoles(rolesData);
+      setPermissions(permsData);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load roles');
-      console.error('Failed to load roles:', err);
+      setError(err instanceof Error ? err.message : 'Failed to load data');
+      console.error('Failed to load data:', err);
     } finally {
       setLoading(false);
     }
   }
 
   const filteredRoles = roles.filter((r) =>
-    r.name.toLowerCase().includes(search.toLowerCase()) ||
-    r.description.toLowerCase().includes(search.toLowerCase())
+    (r.name?.toLowerCase() || '').includes(search.toLowerCase()) ||
+    (r.display_name?.toLowerCase() || '').includes(search.toLowerCase()) ||
+    (r.description?.toLowerCase() || '').includes(search.toLowerCase())
   );
 
-  const systemRoles = filteredRoles.filter(r => r.type === 'system');
-  const customRoles = filteredRoles.filter(r => r.type === 'custom');
+  const systemRoles = filteredRoles.filter(r => r.is_system);
+  const customRoles = filteredRoles.filter(r => !r.is_system);
 
   // Handle create role
-  async function handleCreateRole(roleData: { name: string; description: string; permissions: { [key: string]: ('read' | 'write' | 'delete' | 'admin')[] } }) {
+  async function handleCreateRole(roleData: rolesApi.CreateRoleRequest) {
     try {
       setError(null);
-      // TODO: Implement when backend supports custom roles
       await rolesApi.createRole(roleData);
-      await loadRoles();
+      setSuccess('Role created successfully');
+      await loadData();
       setShowCreate(false);
+      setTimeout(() => setSuccess(null), 3000);
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to create role';
       setError(errorMessage);
-      if (!errorMessage.includes('not yet supported')) {
-        throw err;
-      }
+      throw err;
     }
   }
 
@@ -539,21 +585,20 @@ export default function RolesPage() {
     setShowEdit(true);
   }
 
-  async function handleUpdateRole(roleData: { name: string; description: string; permissions: { [key: string]: ('read' | 'write' | 'delete' | 'admin')[] } }) {
+  async function handleUpdateRole(roleData: rolesApi.UpdateRoleRequest) {
     if (!editingRole) return;
     try {
       setError(null);
-      // TODO: Implement when backend supports role updates
       await rolesApi.updateRole(editingRole.id, roleData);
-      await loadRoles();
+      setSuccess('Role updated successfully');
+      await loadData();
       setShowEdit(false);
       setEditingRole(null);
+      setTimeout(() => setSuccess(null), 3000);
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to update role';
       setError(errorMessage);
-      if (!errorMessage.includes('not yet supported')) {
-        throw err;
-      }
+      throw err;
     }
   }
 
@@ -561,16 +606,20 @@ export default function RolesPage() {
   async function handleDeleteRole(role: Role) {
     try {
       setError(null);
-      // TODO: Implement when backend supports role deletion
       await rolesApi.deleteRole(role.id);
-      await loadRoles();
+      setSuccess('Role deleted successfully');
+      await loadData();
+      setTimeout(() => setSuccess(null), 3000);
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to delete role';
       setError(errorMessage);
-      if (!errorMessage.includes('not yet supported')) {
-        console.error('Failed to delete role:', err);
-      }
     }
+  }
+
+  // Handle view users
+  function handleViewUsers(role: Role) {
+    // Navigate to users page filtered by role
+    window.location.href = `/settings/users?role=${role.name}`;
   }
 
   return (
@@ -581,16 +630,29 @@ export default function RolesPage() {
           <h1 className={cn('text-2xl font-semibold', isLight ? 'text-gray-900' : 'text-gray-100')}>Role Management</h1>
           <p className={cn(isLight ? 'text-gray-600' : 'text-gray-400')}>Define roles and permissions for your organization</p>
         </div>
-        <Button leftIcon={<Plus className="w-5 h-5" />} onClick={() => setShowCreate(true)}>
-          Create Role
-        </Button>
+        <PermissionGuard permission="users:write" fallback="hide">
+          <Button leftIcon={<Plus className="w-5 h-5" />} onClick={() => setShowCreate(true)}>
+            Create Role
+          </Button>
+        </PermissionGuard>
       </div>
+
+      {/* Success Message */}
+      {success && (
+        <div className={cn(
+          'mb-4 p-4 rounded-lg flex items-center gap-2',
+          isLight ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-green-900/20 text-green-400 border border-green-800'
+        )}>
+          <CheckCircle2 className="w-5 h-5" />
+          <span>{success}</span>
+        </div>
+      )}
 
       {/* Error Message */}
       {error && (
         <div className={cn(
           'mb-4 p-4 rounded-lg flex items-center gap-2',
-          isLight ? 'bg-yellow-50 text-yellow-700 border border-yellow-200' : 'bg-yellow-900/20 text-yellow-400 border border-yellow-800'
+          isLight ? 'bg-red-50 text-red-700 border border-red-200' : 'bg-red-900/20 text-red-400 border border-red-800'
         )}>
           <AlertCircle className="w-5 h-5" />
           <span>{error}</span>
@@ -617,6 +679,9 @@ export default function RolesPage() {
       <div className="mb-8">
         <h2 className={cn('text-lg font-semibold mb-4', isLight ? 'text-gray-900' : 'text-gray-100')}>
           System Roles
+          <span className={cn('text-sm font-normal ml-2', isLight ? 'text-gray-500' : 'text-gray-400')}>
+            (Built-in roles that cannot be deleted)
+          </span>
         </h2>
         {loading ? (
           <Card padding>
@@ -632,6 +697,7 @@ export default function RolesPage() {
                 role={role}
                 onEdit={() => handleEditClick(role)}
                 onDelete={() => handleDeleteRole(role)}
+                onViewUsers={() => handleViewUsers(role)}
               />
             ))}
           </div>
@@ -657,6 +723,7 @@ export default function RolesPage() {
                 role={role}
                 onEdit={() => handleEditClick(role)}
                 onDelete={() => handleDeleteRole(role)}
+                onViewUsers={() => handleViewUsers(role)}
               />
             ))}
           </div>
@@ -665,11 +732,13 @@ export default function RolesPage() {
             <Empty
               icon={<Shield className="w-8 h-8" />}
               title="No custom roles"
-              description="Create custom roles to define specific permissions. Note: Custom roles require backend support."
+              description="Create custom roles to define specific permissions for your team members."
               action={
-                <Button leftIcon={<Plus className="w-4 h-4" />} onClick={() => setShowCreate(true)}>
-                  Create Role
-                </Button>
+                <PermissionGuard permission="users:write" fallback="hide">
+                  <Button leftIcon={<Plus className="w-4 h-4" />} onClick={() => setShowCreate(true)}>
+                    Create Role
+                  </Button>
+                </PermissionGuard>
               }
             />
           </Card>
@@ -679,6 +748,7 @@ export default function RolesPage() {
       {/* Create Role Modal */}
       <Modal open={showCreate} onClose={() => setShowCreate(false)} title="Create New Role" size="xl">
         <RoleEditor 
+          permissions={permissions}
           onClose={() => setShowCreate(false)}
           onSave={handleCreateRole}
         />
@@ -691,12 +761,13 @@ export default function RolesPage() {
           setShowEdit(false);
           setEditingRole(null);
         }} 
-        title={`${editingRole?.type === 'system' ? 'View' : 'Edit'} Role: ${editingRole?.name || ''}`} 
+        title={`${editingRole?.is_system ? 'View' : 'Edit'} Role: ${editingRole?.display_name || editingRole?.name || ''}`} 
         size="xl"
       >
         <RoleEditor 
           role={editingRole || undefined}
-          readOnly={editingRole?.type === 'system'}
+          permissions={permissions}
+          readOnly={editingRole?.is_system}
           onClose={() => {
             setShowEdit(false);
             setEditingRole(null);
@@ -707,4 +778,3 @@ export default function RolesPage() {
     </div>
   );
 }
-

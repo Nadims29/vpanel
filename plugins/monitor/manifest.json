@@ -1,0 +1,18 @@
+{
+  "id": "monitor",
+  "name": "System Monitor",
+  "version": "1.0.0",
+  "description": "System monitoring and performance metrics",
+  "author": "VPanel Team",
+  "category": "core",
+  "icon": "activity",
+  "permissions": ["system.read"],
+  "menus": [
+    {
+      "title": "Dashboard",
+      "icon": "layout-dashboard",
+      "path": "/",
+      "order": 0
+    }
+  ]
+}

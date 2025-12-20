@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# VPanel 本地开发脚本
+# VPanel 本地开发脚本 (Plugin Architecture)
 # 用法: ./dev.sh [命令]
 
 set -e
@@ -36,10 +36,11 @@ log_error() {
     echo -e "${RED}[ERROR]${NC} $1"
 }
 
-# 构建 server
+# 构建 server (from core with plugins)
 build_server() {
-    log_info "Building server..."
-    cd panel && CGO_ENABLED=1 go build -ldflags "${LDFLAGS}" -o ../bin/vpanel-server ./cmd/server
+    log_info "Building server (plugin architecture)..."
+    mkdir -p bin
+    cd core && CGO_ENABLED=1 go build -ldflags "${LDFLAGS}" -o ../bin/vpanel-server ./cmd/server
     cd ..
     log_success "Server built: bin/vpanel-server"
 }
@@ -76,8 +77,8 @@ cleanup_port() {
 # 开发模式 - 启动 server
 dev_server() {
     cleanup_port 8080
-    log_info "Starting server in development mode..."
-    cd panel && go run ./cmd/server
+    log_info "Starting server in development mode (plugin architecture)..."
+    cd core && VPANEL_CONFIG=../config.yaml go run ./cmd/server
 }
 
 # 开发模式 - 启动 web
@@ -93,7 +94,7 @@ dev() {
     cleanup_port 3000
     log_info "Starting development servers..."
     # 启动 server 在后台
-    (cd panel && go run ./cmd/server) &
+    (cd core && VPANEL_CONFIG=../config.yaml go run ./cmd/server) &
     SERVER_PID=$!
     
     # 启动 web
@@ -123,7 +124,9 @@ dev_docs() {
 # 运行后端测试
 test_server() {
     log_info "Running server tests..."
-    cd panel && go test -v ./...
+    cd core && go test -v ./...
+    cd ..
+    cd plugins && go test -v ./...
     cd ..
     log_success "Server tests completed"
 }
@@ -146,8 +149,11 @@ test() {
 # 测试覆盖率
 test_coverage() {
     log_info "Running tests with coverage..."
-    cd panel && go test -coverprofile=coverage.out ./...
-    cd panel && go tool cover -html=coverage.out -o coverage.html
+    cd core && go test -coverprofile=coverage.out ./...
+    cd core && go tool cover -html=coverage.out -o coverage.html
+    cd ..
+    cd plugins && go test -coverprofile=coverage.out ./...
+    cd plugins && go tool cover -html=coverage.out -o coverage.html
     cd ..
     cd web && npm run test:cov
     cd ..
@@ -157,7 +163,9 @@ test_coverage() {
 # 代码检查
 lint() {
     log_info "Linting Go code..."
-    cd panel && golangci-lint run
+    cd core && golangci-lint run
+    cd ..
+    cd plugins && golangci-lint run
     cd ..
     log_info "Linting TypeScript..."
     cd web && npm run lint
@@ -183,14 +191,19 @@ clean() {
     rm -rf web/dist/
     rm -rf docs/.vitepress/dist/
     rm -rf docs/.vitepress/cache/
-    rm -rf panel/coverage.*
+    rm -rf core/coverage.*
+    rm -rf plugins/coverage.*
     log_success "Cleaned"
 }
 
 # 安装依赖
 deps() {
     log_info "Installing dependencies..."
-    cd panel && go mod download
+    cd sdk/go && go mod download
+    cd ../..
+    cd plugins && go mod download
+    cd ..
+    cd core && go mod download
     cd ..
     cd web && npm install
     cd ..
@@ -202,7 +215,9 @@ deps() {
 # 代码生成
 generate() {
     log_info "Generating code..."
-    cd panel && go generate ./...
+    cd core && go generate ./...
+    cd ..
+    cd plugins && go generate ./...
     cd ..
     log_success "Code generation completed"
 }
@@ -210,22 +225,25 @@ generate() {
 # 跨平台构建
 build_linux() {
     log_info "Building for Linux..."
-    cd panel && GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -ldflags "${LDFLAGS}" -o ../bin/vpanel-server-linux-amd64 ./cmd/server
+    mkdir -p bin
+    cd core && GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -ldflags "${LDFLAGS}" -o ../bin/vpanel-server-linux-amd64 ./cmd/server
     cd ..
     log_success "Linux build completed"
 }
 
 build_darwin() {
     log_info "Building for macOS..."
-    cd panel && GOOS=darwin GOARCH=amd64 CGO_ENABLED=0 go build -ldflags "${LDFLAGS}" -o ../bin/vpanel-server-darwin-amd64 ./cmd/server
-    cd panel && GOOS=darwin GOARCH=arm64 CGO_ENABLED=0 go build -ldflags "${LDFLAGS}" -o ../bin/vpanel-server-darwin-arm64 ./cmd/server
+    mkdir -p bin
+    cd core && GOOS=darwin GOARCH=amd64 CGO_ENABLED=0 go build -ldflags "${LDFLAGS}" -o ../bin/vpanel-server-darwin-amd64 ./cmd/server
+    cd core && GOOS=darwin GOARCH=arm64 CGO_ENABLED=0 go build -ldflags "${LDFLAGS}" -o ../bin/vpanel-server-darwin-arm64 ./cmd/server
     cd ..
     log_success "macOS build completed"
 }
 
 build_windows() {
     log_info "Building for Windows..."
-    cd panel && GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -ldflags "${LDFLAGS}" -o ../bin/vpanel-server-windows-amd64.exe ./cmd/server
+    mkdir -p bin
+    cd core && GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -ldflags "${LDFLAGS}" -o ../bin/vpanel-server-windows-amd64.exe ./cmd/server
     cd ..
     log_success "Windows build completed"
 }
@@ -238,7 +256,7 @@ build_platforms() {
 
 # 帮助信息
 show_help() {
-    echo "VPanel 本地开发脚本"
+    echo "VPanel 本地开发脚本 (Plugin Architecture)"
     echo ""
     echo "用法: ./dev.sh [命令]"
     echo ""
@@ -268,6 +286,12 @@ show_help() {
     echo "  generate      运行代码生成"
     echo "  clean         清理构建产物"
     echo "  help          显示此帮助信息"
+    echo ""
+    echo "架构说明:"
+    echo "  core/         核心模块 (auth, plugin manager)"
+    echo "  plugins/      所有插件 (monitor, docker, nginx, etc.)"
+    echo "  sdk/go/       Go SDK for plugins"
+    echo "  web/          前端应用"
 }
 
 # 主入口

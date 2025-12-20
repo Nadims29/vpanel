@@ -1,0 +1,13 @@
+{
+  "id": "terminal",
+  "name": "Terminal",
+  "version": "1.0.0",
+  "description": "Web-based terminal access",
+  "author": "VPanel Team",
+  "category": "core",
+  "icon": "terminal",
+  "permissions": ["system.exec"],
+  "menus": [
+    {"title": "Terminal", "icon": "terminal", "path": "/terminal", "order": 70}
+  ]
+}

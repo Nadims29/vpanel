@@ -1,0 +1,25 @@
+{
+  "id": "docker",
+  "name": "Docker Management",
+  "version": "1.0.0",
+  "description": "Docker containers, images, networks and volumes management",
+  "author": "VPanel Team",
+  "category": "infrastructure",
+  "icon": "container",
+  "permissions": ["docker.read", "docker.write", "docker.exec"],
+  "menus": [
+    {
+      "title": "Docker",
+      "icon": "container",
+      "path": "/docker",
+      "order": 10,
+      "children": [
+        {"title": "Containers", "path": "/docker/containers", "order": 0},
+        {"title": "Images", "path": "/docker/images", "order": 1},
+        {"title": "Networks", "path": "/docker/networks", "order": 2},
+        {"title": "Volumes", "path": "/docker/volumes", "order": 3},
+        {"title": "Compose", "path": "/docker/compose", "order": 4}
+      ]
+    }
+  ]
+}

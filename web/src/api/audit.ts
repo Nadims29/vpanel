@@ -50,34 +50,38 @@ export async function listAuditLogs(query: AuditLogQuery = {}): Promise<AuditLog
   const params: Record<string, unknown> = {};
   
   if (query.page) params.page = query.page;
-  if (query.page_size) params.page_size = query.page_size;
+  if (query.page_size) params.per_page = query.page_size;
   if (query.user_id) params.user_id = query.user_id;
   if (query.username) params.username = query.username;
   if (query.action) params.action = query.action;
   if (query.resource) params.resource = query.resource;
   if (query.status) params.status = query.status;
-  if (query.start_date) params.start_date = query.start_date;
-  if (query.end_date) params.end_date = query.end_date;
+  if (query.start_date) params.start_time = query.start_date;
+  if (query.end_date) params.end_time = query.end_date;
   if (query.ip_address) params.ip_address = query.ip_address;
   if (query.search) params.search = query.search;
   
-  return get<AuditLogResult>('/logs/audit', params);
+  return get<AuditLogResult>('/admin/audit-logs', params);
 }
 
 // Get audit log statistics
 export async function getAuditStats(): Promise<AuditStats> {
-  return get<AuditStats>('/logs/audit/stats');
+  return get<AuditStats>('/admin/audit-logs/stats');
 }
 
 // Get distinct actions for filtering
 export async function getAuditActions(): Promise<string[]> {
-  return get<string[]>('/logs/audit/actions');
+  return get<string[]>('/admin/audit-logs/actions');
 }
 
 // Get distinct resources for filtering
 export async function getAuditResources(): Promise<string[]> {
-  return get<string[]>('/logs/audit/resources');
+  return get<string[]>('/admin/audit-logs/resources');
 }
+
+
+
+
 
 
 

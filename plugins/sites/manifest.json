@@ -1,0 +1,13 @@
+{
+  "id": "sites",
+  "name": "Sites & Domains",
+  "version": "1.0.0",
+  "description": "Domain and site management",
+  "author": "VPanel Team",
+  "category": "infrastructure",
+  "icon": "globe",
+  "dependencies": ["nginx", "apps"],
+  "menus": [
+    {"title": "Sites", "icon": "globe", "path": "/sites", "order": 15}
+  ]
+}

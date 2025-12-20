@@ -1,0 +1,12 @@
+{
+  "id": "cron",
+  "name": "Cron Jobs",
+  "version": "1.0.0",
+  "description": "Scheduled task management",
+  "author": "VPanel Team",
+  "category": "system",
+  "icon": "clock",
+  "menus": [
+    {"title": "Cron Jobs", "icon": "clock", "path": "/cron/jobs", "order": 50}
+  ]
+}

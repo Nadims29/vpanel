@@ -2,148 +2,172 @@ import { NavLink, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useUIStore } from '@/stores/ui';
 import { useThemeStore } from '@/stores/theme';
+import { useLicenseStore } from '@/stores/license';
+import { usePermission } from '@/hooks/usePermission';
 import { cn } from '@/utils/cn';
 import {
   LayoutDashboard,
   Container,
   Rocket,
   Globe,
+  Globe2,
   Database,
   FolderOpen,
   Terminal,
   Clock,
   Shield,
-  Package,
-  Puzzle,
+  ShieldCheck,
   Settings,
   FileText,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
+  Crown,
 } from 'lucide-react';
 import { useState, useEffect, useMemo } from 'react';
-import * as pluginsApi from '@/api/plugins';
 
 interface MenuItem {
   title: string;
   icon: React.ElementType;
   path?: string;
-  children?: { title: string; path: string }[];
-  isPlugin?: boolean;
+  children?: { title: string; path: string; permission?: string }[];
+  /** Required permission(s) to view this menu item */
+  permission?: string;
+  /** If true, any of the children's permissions will show the parent */
+  showIfAnyChild?: boolean;
 }
 
 const staticMenuItems: MenuItem[] = [
   { title: 'Dashboard', icon: LayoutDashboard, path: '/' },
   {
+    title: 'Sites',
+    icon: Globe2,
+    permission: 'sites:read',
+    showIfAnyChild: true,
+    children: [
+      { title: 'All Sites', path: '/sites', permission: 'sites:read' },
+      { title: 'Add Site', path: '/sites/add', permission: 'sites:write' },
+    ],
+  },
+  {
+    title: 'SSL Certificates',
+    icon: ShieldCheck,
+    permission: 'sites:read',
+    showIfAnyChild: true,
+    children: [
+      { title: 'All Certificates', path: '/ssl', permission: 'sites:read' },
+      { title: 'Add Certificate', path: '/ssl/add', permission: 'sites:write' },
+    ],
+  },
+  {
     title: 'Docker',
     icon: Container,
+    permission: 'docker:read',
+    showIfAnyChild: true,
     children: [
-      { title: 'Containers', path: '/docker/containers' },
-      { title: 'Images', path: '/docker/images' },
-      { title: 'Networks', path: '/docker/networks' },
-      { title: 'Volumes', path: '/docker/volumes' },
-      { title: 'Compose', path: '/docker/compose' },
+      { title: 'Containers', path: '/docker/containers', permission: 'docker:read' },
+      { title: 'Images', path: '/docker/images', permission: 'docker:read' },
+      { title: 'Networks', path: '/docker/networks', permission: 'docker:read' },
+      { title: 'Volumes', path: '/docker/volumes', permission: 'docker:read' },
+      { title: 'Compose', path: '/docker/compose', permission: 'docker:write' },
     ],
   },
   {
     title: 'Apps',
     icon: Rocket,
+    permission: 'sites:read',
+    showIfAnyChild: true,
     children: [
-      { title: 'All Apps', path: '/apps' },
-      { title: 'Deploy New', path: '/apps/create' },
+      { title: 'All Apps', path: '/apps', permission: 'sites:read' },
+      { title: 'Deploy New', path: '/apps/create', permission: 'sites:write' },
+      { title: 'Runtimes', path: '/apps/runtimes', permission: 'sites:read' },
     ],
   },
   {
     title: 'Nginx',
     icon: Globe,
+    permission: 'sites:read',
+    showIfAnyChild: true,
     children: [
-      { title: 'Instances', path: '/nginx/instances' },
-      { title: 'Sites', path: '/nginx/sites' },
-      { title: 'Certificates', path: '/nginx/certificates' },
-      { title: 'Logs', path: '/nginx/logs' },
+      { title: 'Instances', path: '/nginx/instances', permission: 'sites:read' },
+      { title: 'Sites', path: '/nginx/sites', permission: 'sites:read' },
+      { title: 'Certificates', path: '/nginx/certificates', permission: 'sites:read' },
+      { title: 'Logs', path: '/nginx/logs', permission: 'sites:read' },
     ],
   },
   {
     title: 'Database',
     icon: Database,
+    permission: 'database:read',
+    showIfAnyChild: true,
     children: [
-      { title: 'Servers', path: '/database/servers' },
-      { title: 'Backups', path: '/database/backups' },
+      { title: 'Servers', path: '/database/servers', permission: 'database:read' },
+      { title: 'Backups', path: '/database/backups', permission: 'database:read' },
     ],
   },
-  { title: 'Files', icon: FolderOpen, path: '/files' },
-  { title: 'Terminal', icon: Terminal, path: '/terminal' },
-  { title: 'Cron Jobs', icon: Clock, path: '/cron/jobs' },
-  { title: 'Firewall', icon: Shield, path: '/firewall/rules' },
-  { title: 'Software', icon: Package, path: '/software' },
-  {
-    title: 'Plugins',
-    icon: Puzzle,
-    children: [
-      { title: 'Installed', path: '/plugins' },
-      { title: 'Market', path: '/plugins/market' },
-    ],
-  },
+  { title: 'Files', icon: FolderOpen, path: '/files', permission: 'files:read' },
+  { title: 'Terminal', icon: Terminal, path: '/terminal', permission: 'terminal:access' },
+  { title: 'Cron Jobs', icon: Clock, path: '/cron/jobs', permission: 'cron:read' },
+  { title: 'Firewall', icon: Shield, path: '/firewall/rules', permission: 'firewall:read' },
   {
     title: 'Settings',
     icon: Settings,
+    permission: 'users:read',
+    showIfAnyChild: true,
     children: [
-      { title: 'Users', path: '/settings/users' },
-      { title: 'Roles', path: '/settings/roles' },
-      { title: 'Teams', path: '/settings/teams' },
-      { title: 'System', path: '/settings/system' },
+      { title: 'Users', path: '/settings/users', permission: 'users:read' },
+      { title: 'Roles', path: '/settings/roles', permission: 'users:read' },
+      { title: 'Teams', path: '/settings/teams', permission: 'users:read' },
+      { title: 'Plugins', path: '/settings/plugins', permission: 'plugins:read' },
+      { title: 'License', path: '/settings/license', permission: 'settings:read' },
+      { title: 'System', path: '/settings/system', permission: 'settings:read' },
     ],
   },
-  { title: 'Audit Logs', icon: FileText, path: '/logs/audit' },
+  { title: 'Audit Logs', icon: FileText, path: '/logs/audit', permission: 'audit:read' },
 ];
 
 export default function Sidebar() {
   const location = useLocation();
   const { sidebarCollapsed, setSidebarCollapsed } = useUIStore();
   const resolvedMode = useThemeStore((state) => state.resolvedMode);
+  const isPro = useLicenseStore((state) => state.isPro());
+  const { can, isAdmin, isLoading: permissionsLoading } = usePermission();
   const [expandedItems, setExpandedItems] = useState<string[]>([]);
-  const [pluginMenus, setPluginMenus] = useState<pluginsApi.PluginMenuResponse[]>([]);
   const isLight = resolvedMode === 'light';
 
-  // Fetch plugin menus on mount
-  useEffect(() => {
-    async function fetchPluginMenus() {
-      try {
-        const menus = await pluginsApi.getPluginMenus();
-        setPluginMenus(menus || []);
-      } catch (error) {
-        console.error('Failed to load plugin menus:', error);
-      }
-    }
-    fetchPluginMenus();
-  }, []);
-
-  // Combine static menus with plugin menus
+  // Filter menu items based on user permissions
   const menuItems = useMemo(() => {
-    const items = [...staticMenuItems];
-
-    // Find the Plugins menu item and add plugin pages as children
-    const pluginsIndex = items.findIndex((item) => item.title === 'Plugins');
-    if (pluginsIndex !== -1 && pluginMenus.length > 0) {
-      const pluginsMenu = { ...items[pluginsIndex] };
-      const pluginChildren = pluginMenus.flatMap((pm) =>
-        pm.menus.map((menu) => ({
-          title: menu.title,
-          path: menu.path || `/plugins/${pm.plugin_id}`,
-        }))
-      );
-
-      if (pluginChildren.length > 0) {
-        pluginsMenu.children = [
-          ...(pluginsMenu.children || []),
-          ...pluginChildren,
-        ];
-      }
-      items[pluginsIndex] = pluginsMenu;
+    if (permissionsLoading) {
+      return staticMenuItems; // Show all items while loading
     }
 
-    return items;
-  }, [pluginMenus]);
+    return staticMenuItems.filter(item => {
+      // Admin sees everything
+      if (isAdmin) return true;
+
+      // Items without permission requirement are visible to all
+      if (!item.permission) return true;
+
+      // Check parent permission
+      if (can(item.permission)) return true;
+
+      // If showIfAnyChild is true, check children permissions
+      if (item.showIfAnyChild && item.children) {
+        return item.children.some(child => !child.permission || can(child.permission));
+      }
+
+      return false;
+    }).map(item => {
+      // Filter children based on permissions
+      if (item.children && !isAdmin) {
+        const filteredChildren = item.children.filter(
+          child => !child.permission || can(child.permission)
+        );
+        return { ...item, children: filteredChildren };
+      }
+      return item;
+    });
+  }, [can, isAdmin, permissionsLoading]);
 
   // Auto-expand menu items that contain the current active path
   useEffect(() => {
@@ -187,19 +211,34 @@ export default function Sidebar() {
         isLight ? "border-gray-200" : "border-gray-800"
       )}>
         <NavLink to="/" className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl dify-gradient flex items-center justify-center shadow-lg shadow-blue-500/20">
+          <div className={cn(
+            "w-10 h-10 rounded-xl flex items-center justify-center shadow-lg transition-all duration-300",
+            isPro 
+              ? "bg-gradient-to-br from-amber-400 via-orange-500 to-rose-500 shadow-orange-500/30" 
+              : "dify-gradient shadow-blue-500/20"
+          )}>
             <span className="text-white font-bold text-lg">V</span>
           </div>
           <AnimatePresence>
             {!sidebarCollapsed && (
-              <motion.span
+              <motion.div
                 initial={{ opacity: 0, width: 0 }}
                 animate={{ opacity: 1, width: 'auto' }}
                 exit={{ opacity: 0, width: 0 }}
-                className="font-semibold text-xl dify-gradient-text overflow-hidden"
+                className="flex items-center gap-2 overflow-hidden"
               >
-                Panel
-              </motion.span>
+                <span className={cn(
+                  "font-semibold text-xl",
+                  isPro ? "bg-gradient-to-r from-amber-400 to-orange-500 bg-clip-text text-transparent" : "dify-gradient-text"
+                )}>
+                  Panel
+                </span>
+                {isPro && (
+                  <span className="px-1.5 py-0.5 text-xs font-semibold rounded bg-gradient-to-r from-amber-400 to-orange-500 text-white">
+                    Pro
+                  </span>
+                )}
+              </motion.div>
             )}
           </AnimatePresence>
         </NavLink>

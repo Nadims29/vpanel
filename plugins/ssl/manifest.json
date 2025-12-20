@@ -1,0 +1,50 @@
+{
+  "id": "ssl",
+  "name": "SSL Certificates",
+  "version": "1.0.0",
+  "description": "SSL/TLS certificate management with Let's Encrypt, custom certificates, and self-signed support",
+  "author": "VPanel Team",
+  "license": "MIT",
+  "homepage": "https://vpanel.dev",
+  "icon": "shield-check",
+  "category": "security",
+  "tags": ["ssl", "tls", "certificates", "letsencrypt", "security", "https"],
+  "dependencies": [],
+  "permissions": [
+    "network",
+    "filesystem"
+  ],
+  "api": {
+    "routes": [
+      { "method": "GET", "path": "/ssl", "description": "List all certificates" },
+      { "method": "GET", "path": "/ssl/stats", "description": "Get certificate statistics" },
+      { "method": "GET", "path": "/ssl/lookup", "description": "Find certificate by domain" },
+      { "method": "GET", "path": "/ssl/:id", "description": "Get certificate by ID" },
+      { "method": "POST", "path": "/ssl/letsencrypt", "description": "Create Let's Encrypt certificate" },
+      { "method": "POST", "path": "/ssl/custom", "description": "Upload custom certificate" },
+      { "method": "POST", "path": "/ssl/selfsigned", "description": "Create self-signed certificate" },
+      { "method": "PUT", "path": "/ssl/:id", "description": "Update certificate" },
+      { "method": "DELETE", "path": "/ssl/:id", "description": "Delete certificate" },
+      { "method": "POST", "path": "/ssl/:id/renew", "description": "Renew certificate" },
+      { "method": "GET", "path": "/ssl/:id/validate", "description": "Validate certificate" },
+      { "method": "POST", "path": "/ssl/check-expiring", "description": "Check and renew expiring certificates" }
+    ]
+  },
+  "frontend": {
+    "routes": [
+      { "path": "/ssl", "component": "ssl/List", "title": "SSL Certificates" },
+      { "path": "/ssl/add", "component": "ssl/Add", "title": "Add Certificate" },
+      { "path": "/ssl/:id", "component": "ssl/Detail", "title": "Certificate Details" }
+    ],
+    "menu": [
+      {
+        "id": "ssl",
+        "title": "SSL Certificates",
+        "icon": "shield-check",
+        "path": "/ssl",
+        "order": 18
+      }
+    ]
+  }
+}
+

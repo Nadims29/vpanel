@@ -1,0 +1,13 @@
+{
+  "id": "apps",
+  "name": "Applications",
+  "version": "1.0.0",
+  "description": "Git-based application deployment",
+  "author": "VPanel Team",
+  "category": "infrastructure",
+  "icon": "package",
+  "dependencies": ["docker", "nginx"],
+  "menus": [
+    {"title": "Apps", "icon": "package", "path": "/apps", "order": 25}
+  ]
+}

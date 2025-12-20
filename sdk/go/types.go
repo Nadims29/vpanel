@@ -3,6 +3,7 @@ package sdk
 import "time"
 
 // Common types used throughout the SDK.
+// Note: FileInfo, HTTPResponse, and Event are defined in api.go and hooks.go
 
 // Manifest describes a plugin's metadata and configuration.
 type Manifest struct {

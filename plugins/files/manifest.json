@@ -1,0 +1,18 @@
+{
+  "id": "files",
+  "name": "File Manager",
+  "version": "1.0.0",
+  "description": "File management and editing",
+  "author": "VPanel Team",
+  "category": "core",
+  "icon": "folder",
+  "permissions": ["files.read", "files.write", "files.delete"],
+  "menus": [
+    {
+      "title": "Files",
+      "icon": "folder",
+      "path": "/files",
+      "order": 60
+    }
+  ]
+}

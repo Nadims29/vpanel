@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { usePermissionsStore } from './permissions';
 
 interface User {
   id: string;
@@ -51,13 +52,13 @@ export const useAuthStore = create<AuthState>()(
           const data = await response.json();
 
           if (!response.ok) {
-            throw new Error(data.error?.message || 'Login failed');
+            throw new Error(data.error?.message || data.message || 'Login failed');
           }
 
           set({
-            user: data.data.user,
-            token: data.data.token,
-            refreshToken: data.data.refresh_token,
+            user: data.user,
+            token: data.token,
+            refreshToken: data.refresh_token,
             isAuthenticated: true,
             isLoading: false,
           });
@@ -79,6 +80,9 @@ export const useAuthStore = create<AuthState>()(
             headers: { Authorization: `Bearer ${token}` },
           }).catch(() => {});
         }
+
+        // Clear permissions
+        usePermissionsStore.getState().clearPermissions();
 
         set({
           user: null,
@@ -109,8 +113,8 @@ export const useAuthStore = create<AuthState>()(
           }
 
           set({
-            token: data.data.token,
-            refreshToken: data.data.refresh_token,
+            token: data.token,
+            refreshToken: data.refresh_token,
           });
         } catch {
           get().logout();

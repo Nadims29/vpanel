@@ -124,10 +124,11 @@ type FileAPI interface {
 
 // FileInfo contains file metadata.
 type FileInfo struct {
-	Name    string
-	Size    int64
-	IsDir   bool
-	ModTime time.Time
+	Name    string    `json:"name"`
+	Size    int64     `json:"size"`
+	IsDir   bool      `json:"is_dir"`
+	ModTime time.Time `json:"mod_time"`
+	Mode    string    `json:"mode,omitempty"`
 }
 
 // HTTPAPI provides HTTP client functionality.
@@ -147,9 +148,9 @@ type HTTPAPI interface {
 
 // HTTPResponse represents an HTTP response.
 type HTTPResponse struct {
-	StatusCode int
-	Headers    map[string][]string
-	Body       []byte
+	StatusCode int                 `json:"status_code"`
+	Headers    map[string][]string `json:"headers,omitempty"`
+	Body       []byte              `json:"body"`
 }
 
 // NotificationAPI provides notification functionality.

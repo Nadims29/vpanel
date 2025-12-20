@@ -66,19 +66,22 @@ const (
 // Event represents an event from the VPanel system.
 type Event struct {
 	// Type is the event type (e.g., "container.start")
-	Type string
-
-	// Payload contains event-specific data
-	Payload interface{}
-
-	// Timestamp is when the event occurred
-	Timestamp int64
+	Type string `json:"type"`
 
 	// Source indicates the origin of the event
-	Source string
+	Source string `json:"source"`
+
+	// Timestamp is when the event occurred
+	Timestamp int64 `json:"timestamp"`
+
+	// Payload contains event-specific data
+	Payload interface{} `json:"payload,omitempty"`
+
+	// Data contains event-specific data (alternative to Payload)
+	Data map[string]interface{} `json:"data,omitempty"`
 
 	// Metadata contains additional event information
-	Metadata map[string]string
+	Metadata map[string]string `json:"metadata,omitempty"`
 }
 
 // EventHandler is a function that handles events.

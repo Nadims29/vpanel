@@ -45,9 +45,13 @@ coverage.html
 Thumbs.db
 .DS_Store
 
-# Plugins (user installed)
-plugins/*
-!plugins/.gitkeep
+# Plugin symlinks and build artifacts
+plugins/node_modules
+plugins/*/build/
+plugins/*/*.so
+
+# External plugins (user installed) - keep builtin plugins
+# plugins/external/
 
 # Backups
 backups/
@@ -57,3 +61,4 @@ docs/.vitepress/dist/
 docs/.vitepress/cache/
 docs/node_modules/
 
+panel/server

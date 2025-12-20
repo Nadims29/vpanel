@@ -69,10 +69,13 @@ export function Tab({ value, children, icon, active, onClick }: TabProps) {
   const isActive = active !== undefined ? active : (context && value ? context.activeTab === value : false);
 
   const handleClick = () => {
+    // Always set active tab when value is provided
+    if (context && value) {
+      context.setActiveTab(value);
+    }
+    // Also call onClick if provided
     if (onClick) {
       onClick();
-    } else if (context && value) {
-      context.setActiveTab(value);
     }
   };
 

@@ -16,4 +16,6 @@ export { Pagination } from './Pagination';
 export { SearchInput } from './SearchInput';
 export { StatusDot } from './StatusDot';
 export { ThemeSwitcher, ThemeToggle } from './ThemeSwitcher';
-
+export { ProBadge, LogoProBadge } from './ProBadge';
+export { ProGuard, ProButton, ProUpgradeModal, useProGuard } from './ProGuard';
+export { PermissionGuard, withPermission } from './PermissionGuard';

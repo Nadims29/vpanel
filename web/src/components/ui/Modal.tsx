@@ -48,11 +48,15 @@ export function Modal({
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             onClick={closeOnBackdrop ? onClose : undefined}
-            className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[99]"
+            className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[9998]"
+            style={{ position: 'fixed' }}
           />
 
           {/* Modal Container - uses flex for centering */}
-          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 pointer-events-none">
+          <div 
+            className="fixed inset-0 z-[9999] flex items-center justify-center p-4 pointer-events-none"
+            style={{ position: 'fixed' }}
+          >
             <motion.div
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
@@ -61,8 +65,13 @@ export function Modal({
               className={cn(
                 'w-full bg-dark-800 border border-dark-700 rounded-xl shadow-2xl',
                 'max-h-[90vh] overflow-y-auto pointer-events-auto',
+                'scrollbar-thin scrollbar-thumb-dark-600 scrollbar-track-dark-900',
                 sizes[size]
               )}
+              style={{ 
+                maxHeight: '90vh',
+                overflowY: 'auto',
+              }}
             >
             {/* Header */}
             {(title || showClose) && (
