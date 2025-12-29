@@ -11,6 +11,8 @@ export default defineConfig({
       // Plugin frontend aliases - allows importing from @plugins/xxx
       '@plugins': path.resolve(__dirname, '../plugins'),
     },
+    // Ensure node_modules resolution works for plugin imports
+    preserveSymlinks: false,
     // Dedupe ensures modules are resolved from web/node_modules
     dedupe: [
       'react',
@@ -23,6 +25,10 @@ export default defineConfig({
       'zustand',
       'axios',
       'date-fns',
+      '@xterm/xterm',
+      '@xterm/addon-fit',
+      '@xterm/addon-web-links',
+      '@xterm/addon-webgl',
     ],
   },
   // Optimize deps to include plugin directories
@@ -34,6 +40,10 @@ export default defineConfig({
       'framer-motion',
       'lucide-react',
       'react-hot-toast',
+      '@xterm/xterm',
+      '@xterm/addon-fit',
+      '@xterm/addon-web-links',
+      '@xterm/addon-webgl',
     ],
   },
   server: {
@@ -64,12 +74,17 @@ export default defineConfig({
   build: {
     outDir: 'dist',
     sourcemap: false,
+    commonjsOptions: {
+      include: [/node_modules/],
+      transformMixedEsModules: true,
+    },
     rollupOptions: {
       output: {
         manualChunks: {
           vendor: ['react', 'react-dom', 'react-router-dom'],
           charts: ['recharts'],
           editor: ['monaco-editor'],
+          xterm: ['@xterm/xterm', '@xterm/addon-fit', '@xterm/addon-web-links', '@xterm/addon-webgl'],
         },
       },
     },
