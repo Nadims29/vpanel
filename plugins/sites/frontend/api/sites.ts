@@ -471,3 +471,4 @@ export async function getAvailableNginxSites(): Promise<NginxSite[]> {
   return get<NginxSite[]>('/sites/available/nginx-sites');
 }
 
+

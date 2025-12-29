@@ -309,3 +309,4 @@ export async function getErrorLogs(siteId?: string, lines = 100): Promise<{ logs
   return get<{ logs: string[] }>('/nginx/logs/error', siteId ? { site_id: siteId, lines } : { lines });
 }
 
+

@@ -77,3 +77,4 @@ export async function getJobLogs(jobId: string, limit?: number): Promise<CronJob
   return get<CronJobLog[]>(`/cron/jobs/${jobId}/logs`, params);
 }
 
+

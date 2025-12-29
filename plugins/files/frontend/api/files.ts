@@ -96,3 +96,4 @@ export async function decompressFile(archivePath: string, destPath: string): Pro
   return post<void>('/files/decompress', { archive_path: archivePath, dest_path: destPath });
 }
 
+

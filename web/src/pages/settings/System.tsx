@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import {
   Settings,
   Shield,
@@ -13,6 +13,11 @@ import {
   Loader2,
   AlertCircle,
   CheckCircle,
+  Download,
+  ArrowUpCircle,
+  Package,
+  Clock,
+  GitCommit,
 } from 'lucide-react';
 import {
   Button,
@@ -30,7 +35,9 @@ import {
 import { cn } from '@/utils/cn';
 import { useThemeStore } from '@/stores/theme';
 import * as settingsApi from '@/api/settings';
+import * as updateApi from '@/api/update';
 import type { SystemSettings } from '@/api/settings';
+import type { UpdateStatus, CheckUpdateResponse, CurrentVersion } from '@/api/update';
 
 export default function SystemSettings() {
   const [loading, setLoading] = useState(true);
@@ -38,12 +45,60 @@ export default function SystemSettings() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
   const [settings, setSettings] = useState<SystemSettings | null>(null);
+  
+  // Update state
+  const [currentVersion, setCurrentVersion] = useState<CurrentVersion | null>(null);
+  const [updateStatus, setUpdateStatus] = useState<UpdateStatus | null>(null);
+  const [updateCheckResult, setUpdateCheckResult] = useState<CheckUpdateResponse | null>(null);
+  const [checkingUpdate, setCheckingUpdate] = useState(false);
+  const [performingUpdate, setPerformingUpdate] = useState(false);
+  
   const resolvedMode = useThemeStore((state) => state.resolvedMode);
   const isLight = resolvedMode === 'light';
 
-  // Load settings on mount
+  // Load settings and version on mount
   useEffect(() => {
     loadSettings();
+    loadVersionInfo();
+  }, []);
+
+  // Poll update status when update is in progress
+  useEffect(() => {
+    if (!performingUpdate) return;
+    
+    const interval = setInterval(async () => {
+      try {
+        const status = await updateApi.getUpdateStatus();
+        setUpdateStatus(status);
+        
+        if (status.state === 'completed' || status.state === 'failed' || status.state === 'idle') {
+          setPerformingUpdate(false);
+        }
+        
+        if (status.state === 'restarting') {
+          // Server is restarting, show message
+          setSuccess(true);
+          setTimeout(() => {
+            window.location.reload();
+          }, 5000);
+        }
+      } catch {
+        // Server might be restarting
+      }
+    }, 2000);
+
+    return () => clearInterval(interval);
+  }, [performingUpdate]);
+
+  const loadVersionInfo = useCallback(async () => {
+    try {
+      const version = await updateApi.getCurrentVersion();
+      setCurrentVersion(version);
+      const status = await updateApi.getUpdateStatus();
+      setUpdateStatus(status);
+    } catch (err) {
+      console.error('Failed to load version info:', err);
+    }
   }, []);
 
   async function loadSettings() {
@@ -89,6 +144,34 @@ export default function SystemSettings() {
         [key]: value,
       },
     });
+  };
+
+  const handleCheckUpdate = async () => {
+    try {
+      setCheckingUpdate(true);
+      setError(null);
+      const result = await updateApi.checkForUpdates();
+      setUpdateCheckResult(result);
+      const status = await updateApi.getUpdateStatus();
+      setUpdateStatus(status);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to check for updates');
+    } finally {
+      setCheckingUpdate(false);
+    }
+  };
+
+  const handlePerformUpdate = async () => {
+    try {
+      setPerformingUpdate(true);
+      setError(null);
+      await updateApi.performUpdate();
+      const status = await updateApi.getUpdateStatus();
+      setUpdateStatus(status);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to perform update');
+      setPerformingUpdate(false);
+    }
   };
 
   if (loading) {
@@ -162,6 +245,7 @@ export default function SystemSettings() {
           <Tab value="notifications" icon={<Bell className="w-4 h-4" />}>Notifications</Tab>
           <Tab value="backup" icon={<Database className="w-4 h-4" />}>Backup</Tab>
           <Tab value="advanced" icon={<Server className="w-4 h-4" />}>Advanced</Tab>
+          <Tab value="update" icon={<ArrowUpCircle className="w-4 h-4" />}>Update</Tab>
         </TabList>
 
         {/* General Settings */}
@@ -756,6 +840,182 @@ export default function SystemSettings() {
                   </div>
                   <Button variant="danger" size="sm">Clear</Button>
                 </div>
+              </CardContent>
+            </Card>
+          </div>
+        </TabPanel>
+
+        {/* Update Settings */}
+        <TabPanel value="update">
+          <div className="grid gap-6">
+            {/* Current Version Card */}
+            <Card>
+              <CardHeader>
+                <h3 className={cn('font-medium', isLight ? 'text-gray-900' : 'text-gray-100')}>Current Version</h3>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className={cn('p-4 rounded-lg', isLight ? 'bg-gray-50' : 'bg-gray-900/50')}>
+                    <div className="flex items-center gap-2 mb-2">
+                      <Package className={cn('w-4 h-4', isLight ? 'text-gray-500' : 'text-gray-400')} />
+                      <span className={cn('text-sm', isLight ? 'text-gray-500' : 'text-gray-400')}>Version</span>
+                    </div>
+                    <p className={cn('text-lg font-mono font-semibold', isLight ? 'text-gray-900' : 'text-gray-100')}>
+                      {currentVersion?.version || 'Loading...'}
+                    </p>
+                  </div>
+                  <div className={cn('p-4 rounded-lg', isLight ? 'bg-gray-50' : 'bg-gray-900/50')}>
+                    <div className="flex items-center gap-2 mb-2">
+                      <Clock className={cn('w-4 h-4', isLight ? 'text-gray-500' : 'text-gray-400')} />
+                      <span className={cn('text-sm', isLight ? 'text-gray-500' : 'text-gray-400')}>Build Time</span>
+                    </div>
+                    <p className={cn('text-sm font-mono', isLight ? 'text-gray-700' : 'text-gray-300')}>
+                      {currentVersion?.build_time || 'Unknown'}
+                    </p>
+                  </div>
+                  <div className={cn('p-4 rounded-lg', isLight ? 'bg-gray-50' : 'bg-gray-900/50')}>
+                    <div className="flex items-center gap-2 mb-2">
+                      <GitCommit className={cn('w-4 h-4', isLight ? 'text-gray-500' : 'text-gray-400')} />
+                      <span className={cn('text-sm', isLight ? 'text-gray-500' : 'text-gray-400')}>Git Commit</span>
+                    </div>
+                    <p className={cn('text-sm font-mono', isLight ? 'text-gray-700' : 'text-gray-300')}>
+                      {currentVersion?.git_commit?.substring(0, 8) || 'Unknown'}
+                    </p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Check for Updates Card */}
+            <Card>
+              <CardHeader>
+                <h3 className={cn('font-medium', isLight ? 'text-gray-900' : 'text-gray-100')}>Software Updates</h3>
+                <Button 
+                  variant="secondary" 
+                  size="sm" 
+                  leftIcon={checkingUpdate ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+                  onClick={handleCheckUpdate}
+                  disabled={checkingUpdate || performingUpdate}
+                >
+                  {checkingUpdate ? 'Checking...' : 'Check for Updates'}
+                </Button>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {/* Update Status */}
+                {updateStatus && updateStatus.state !== 'idle' && (
+                  <div className={cn(
+                    'p-4 rounded-lg',
+                    updateStatus.state === 'failed' 
+                      ? (isLight ? 'bg-red-50 border border-red-200' : 'bg-red-900/20 border border-red-800')
+                      : updateStatus.state === 'available'
+                      ? (isLight ? 'bg-amber-50 border border-amber-200' : 'bg-amber-900/20 border border-amber-800')
+                      : updateStatus.state === 'completed'
+                      ? (isLight ? 'bg-green-50 border border-green-200' : 'bg-green-900/20 border border-green-800')
+                      : (isLight ? 'bg-blue-50 border border-blue-200' : 'bg-blue-900/20 border border-blue-800')
+                  )}>
+                    <div className="flex items-center justify-between mb-2">
+                      <span className={cn(
+                        'font-medium',
+                        updateStatus.state === 'failed' ? (isLight ? 'text-red-700' : 'text-red-400') :
+                        updateStatus.state === 'available' ? (isLight ? 'text-amber-700' : 'text-amber-400') :
+                        updateStatus.state === 'completed' ? (isLight ? 'text-green-700' : 'text-green-400') :
+                        (isLight ? 'text-blue-700' : 'text-blue-400')
+                      )}>
+                        {updateStatus.message}
+                      </span>
+                      {updateStatus.state === 'downloading' || updateStatus.state === 'installing' ? (
+                        <span className={cn('text-sm', isLight ? 'text-gray-600' : 'text-gray-400')}>
+                          {updateStatus.progress}%
+                        </span>
+                      ) : null}
+                    </div>
+                    
+                    {/* Progress bar */}
+                    {(updateStatus.state === 'downloading' || updateStatus.state === 'installing') && (
+                      <div className={cn('h-2 rounded-full overflow-hidden', isLight ? 'bg-gray-200' : 'bg-gray-700')}>
+                        <div 
+                          className="h-full bg-gradient-to-r from-cyan-500 to-purple-500 transition-all duration-300"
+                          style={{ width: `${updateStatus.progress}%` }}
+                        />
+                      </div>
+                    )}
+
+                    {updateStatus.error && (
+                      <p className={cn('text-sm mt-2', isLight ? 'text-red-600' : 'text-red-400')}>
+                        {updateStatus.error}
+                      </p>
+                    )}
+                  </div>
+                )}
+
+                {/* Available Update Info */}
+                {updateCheckResult?.has_update && updateCheckResult.latest_version && (
+                  <div className={cn('p-4 rounded-lg border', isLight ? 'bg-gradient-to-r from-cyan-50 to-purple-50 border-cyan-200' : 'bg-gradient-to-r from-cyan-900/20 to-purple-900/20 border-cyan-800')}>
+                    <div className="flex items-start justify-between">
+                      <div>
+                        <div className="flex items-center gap-2 mb-2">
+                          <ArrowUpCircle className={cn('w-5 h-5', isLight ? 'text-cyan-600' : 'text-cyan-400')} />
+                          <span className={cn('font-semibold', isLight ? 'text-gray-900' : 'text-gray-100')}>
+                            New Version Available: v{updateCheckResult.latest_version.version}
+                          </span>
+                        </div>
+                        {updateCheckResult.latest_version.changelog && (
+                          <p className={cn('text-sm mb-3', isLight ? 'text-gray-600' : 'text-gray-400')}>
+                            {updateCheckResult.latest_version.changelog}
+                          </p>
+                        )}
+                        {updateCheckResult.latest_version.size && (
+                          <p className={cn('text-xs', isLight ? 'text-gray-500' : 'text-gray-500')}>
+                            Download size: {(updateCheckResult.latest_version.size / 1024 / 1024).toFixed(2)} MB
+                          </p>
+                        )}
+                      </div>
+                      <Button
+                        className="bg-gradient-to-r from-cyan-500 to-purple-500 text-white border-0 hover:from-cyan-600 hover:to-purple-600"
+                        leftIcon={performingUpdate ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+                        onClick={handlePerformUpdate}
+                        disabled={performingUpdate}
+                      >
+                        {performingUpdate ? 'Updating...' : 'Update Now'}
+                      </Button>
+                    </div>
+                  </div>
+                )}
+
+                {/* No Updates Available */}
+                {updateCheckResult && !updateCheckResult.has_update && (
+                  <div className={cn('p-4 rounded-lg flex items-center gap-3', isLight ? 'bg-green-50' : 'bg-green-900/20')}>
+                    <CheckCircle className={cn('w-5 h-5', isLight ? 'text-green-600' : 'text-green-400')} />
+                    <span className={cn(isLight ? 'text-green-700' : 'text-green-400')}>
+                      You are running the latest version
+                    </span>
+                  </div>
+                )}
+
+                {/* Initial State */}
+                {!updateCheckResult && (!updateStatus || updateStatus.state === 'idle') && (
+                  <div className={cn('p-4 rounded-lg text-center', isLight ? 'bg-gray-50' : 'bg-gray-900/50')}>
+                    <ArrowUpCircle className={cn('w-12 h-12 mx-auto mb-3', isLight ? 'text-gray-300' : 'text-gray-600')} />
+                    <p className={cn('text-sm', isLight ? 'text-gray-500' : 'text-gray-400')}>
+                      Click "Check for Updates" to see if a new version is available
+                    </p>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Update Warning */}
+            <Card className={cn('border', isLight ? 'border-amber-200' : 'border-amber-800')}>
+              <CardHeader>
+                <h3 className={cn('font-medium', isLight ? 'text-amber-700' : 'text-amber-400')}>Important Notes</h3>
+              </CardHeader>
+              <CardContent>
+                <ul className={cn('list-disc list-inside space-y-2 text-sm', isLight ? 'text-gray-600' : 'text-gray-400')}>
+                  <li>The server will automatically restart after the update is complete</li>
+                  <li>Please ensure all important work is saved before updating</li>
+                  <li>The update process typically takes 1-2 minutes</li>
+                  <li>A backup of the current version is automatically created</li>
+                </ul>
               </CardContent>
             </Card>
           </div>

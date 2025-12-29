@@ -16,6 +16,7 @@ import (
 	"github.com/vpanel/core/internal/license"
 	"github.com/vpanel/core/internal/middleware"
 	"github.com/vpanel/core/internal/plugin"
+	"github.com/vpanel/core/internal/update"
 	"github.com/vpanel/core/pkg/logger"
 
 	// Import builtin plugins
@@ -92,6 +93,10 @@ func main() {
 	licenseService := license.NewService(db, cfg, log)
 	licenseHandlers := license.NewHandlers(licenseService)
 
+	// Initialize update service
+	updateService := update.NewService(log, Version, BuildTime, GitCommit, cfg.Plugin.MarketURL, cfg.Storage.DataDir)
+	updateHandlers := update.NewHandlers(updateService)
+
 	// Initialize plugin manager
 	pm := plugin.NewManager(
 		plugin.Config{DataDir: cfg.Plugin.DataDirectory},
@@ -135,7 +140,7 @@ func main() {
 	pluginHandlers := plugin.NewHandlers(pm)
 
 	// Setup routes
-	setupRoutes(router, authHandlers, authService, licenseHandlers, pm, pluginHandlers)
+	setupRoutes(router, authHandlers, authService, licenseHandlers, updateHandlers, pm, pluginHandlers)
 
 	// Serve static files
 	setupStatic(router, cfg.Server.WebDir)
@@ -184,6 +189,7 @@ func setupRoutes(
 	authHandlers *auth.Handlers,
 	authService *auth.Service,
 	licenseHandlers *license.Handlers,
+	updateHandlers *update.Handlers,
 	pm *plugin.Manager,
 	pluginHandlers *plugin.Handlers,
 ) {
@@ -238,6 +244,9 @@ func setupRoutes(
 
 		// Plugin management routes
 		pluginHandlers.RegisterRoutes(api)
+
+		// Update management routes
+		updateHandlers.RegisterRoutes(api)
 
 		// Register all plugin API routes
 		pm.RegisterRoutes(api)
