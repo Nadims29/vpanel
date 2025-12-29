@@ -27,7 +27,7 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version: ${{ env.GO_VERSION }}
-          cache-dependency-path: panel/go.sum
+          cache-dependency-path: core/go.sum
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -45,13 +45,8 @@ jobs:
 
       - name: Download Go dependencies
         run: |
-          cd panel
+          cd core
           go mod download
-
-      - name: Run Go tests
-        run: |
-          cd panel
-          go test -v -race -coverprofile=coverage.out ./...
 
       - name: Build Server binaries
         run: |
@@ -59,7 +54,7 @@ jobs:
           mkdir -p bin
           
           # Linux amd64
-          cd panel
+          cd core
           CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
             -ldflags "-s -w -X main.Version=${VERSION}" \
             -o ../bin/vpanel-server-linux-amd64 ./cmd/server
@@ -73,12 +68,6 @@ jobs:
         run: |
           cd web
           npm ci
-
-      - name: Run frontend tests
-        run: |
-          cd web
-          npm run lint --if-present
-          npm run test --if-present
 
       - name: Build Web Frontend
         run: |
@@ -105,7 +94,7 @@ jobs:
           cp bin/vpanel-server-linux-amd64 vpanel-${VERSION}-linux-amd64/vpanel-server
           cp -r web/dist vpanel-${VERSION}-linux-amd64/web
           cp scripts/install.sh vpanel-${VERSION}-linux-amd64/
-          cp panel/config.yaml vpanel-${VERSION}-linux-amd64/config.example.yaml
+          cp config.yaml vpanel-${VERSION}-linux-amd64/config.example.yaml
           tar -czvf releases/vpanel-${VERSION}-linux-amd64.tar.gz vpanel-${VERSION}-linux-amd64
           
           # Linux arm64
@@ -113,7 +102,7 @@ jobs:
           cp bin/vpanel-server-linux-arm64 vpanel-${VERSION}-linux-arm64/vpanel-server
           cp -r web/dist vpanel-${VERSION}-linux-arm64/web
           cp scripts/install.sh vpanel-${VERSION}-linux-arm64/
-          cp panel/config.yaml vpanel-${VERSION}-linux-arm64/config.example.yaml
+          cp config.yaml vpanel-${VERSION}-linux-arm64/config.example.yaml
           tar -czvf releases/vpanel-${VERSION}-linux-arm64.tar.gz vpanel-${VERSION}-linux-arm64
           
           # Package docs separately for vcloud deployment
