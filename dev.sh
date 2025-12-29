@@ -223,10 +223,16 @@ generate() {
 }
 
 # 跨平台构建
+# Note: SQLite requires CGO, so CGO_ENABLED=1 is required
+# For cross-compilation, ensure you have the appropriate C cross-compiler installed:
+# - Linux: gcc (native) or gcc-x86-64-linux-gnu (cross-compile from macOS)
+# - macOS: clang (native) or osxcross (cross-compile)
+# - Windows: MinGW-w64 (cross-compile)
 build_linux() {
     log_info "Building for Linux..."
+    log_warn "Note: CGO is required for SQLite. Cross-compilation requires gcc-x86-64-linux-gnu."
     mkdir -p bin
-    cd core && GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -ldflags "${LDFLAGS}" -o ../bin/vpanel-server-linux-amd64 ./cmd/server
+    cd core && GOOS=linux GOARCH=amd64 CGO_ENABLED=1 go build -ldflags "${LDFLAGS}" -o ../bin/vpanel-server-linux-amd64 ./cmd/server
     cd ..
     log_success "Linux build completed"
 }
@@ -234,16 +240,17 @@ build_linux() {
 build_darwin() {
     log_info "Building for macOS..."
     mkdir -p bin
-    cd core && GOOS=darwin GOARCH=amd64 CGO_ENABLED=0 go build -ldflags "${LDFLAGS}" -o ../bin/vpanel-server-darwin-amd64 ./cmd/server
-    cd core && GOOS=darwin GOARCH=arm64 CGO_ENABLED=0 go build -ldflags "${LDFLAGS}" -o ../bin/vpanel-server-darwin-arm64 ./cmd/server
+    cd core && GOOS=darwin GOARCH=amd64 CGO_ENABLED=1 go build -ldflags "${LDFLAGS}" -o ../bin/vpanel-server-darwin-amd64 ./cmd/server
+    cd core && GOOS=darwin GOARCH=arm64 CGO_ENABLED=1 go build -ldflags "${LDFLAGS}" -o ../bin/vpanel-server-darwin-arm64 ./cmd/server
     cd ..
     log_success "macOS build completed"
 }
 
 build_windows() {
     log_info "Building for Windows..."
+    log_warn "Note: CGO is required for SQLite. Cross-compilation requires MinGW-w64."
     mkdir -p bin
-    cd core && GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -ldflags "${LDFLAGS}" -o ../bin/vpanel-server-windows-amd64.exe ./cmd/server
+    cd core && GOOS=windows GOARCH=amd64 CGO_ENABLED=1 go build -ldflags "${LDFLAGS}" -o ../bin/vpanel-server-windows-amd64.exe ./cmd/server
     cd ..
     log_success "Windows build completed"
 }
