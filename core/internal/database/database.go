@@ -1,11 +1,11 @@
 package database
 
 import (
+	"github.com/glebarez/sqlite"
 	"github.com/vpanel/core/internal/auth"
 	"github.com/vpanel/core/internal/config"
 	"github.com/vpanel/core/internal/license"
 	"gorm.io/driver/postgres"
-	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 )
@@ -18,6 +18,7 @@ func New(cfg config.DatabaseConfig) (*gorm.DB, error) {
 	case "postgres":
 		dialector = postgres.Open(cfg.DSN())
 	case "sqlite":
+		// Using pure Go SQLite driver (no CGO required)
 		dialector = sqlite.Open(cfg.Database)
 	default:
 		dialector = sqlite.Open(cfg.Database)
